@@ -10,7 +10,7 @@ async function run() {
   );
   try {
     await encryptedBackup(
-      process.env.DATABASE_PATH || "/data/closeword.sqlite",
+      process.env.DATABASE_PATH || "/data/mvp.sqlite",
       file,
       process.env.BACKUP_KEY_FILE,
     );

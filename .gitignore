@@ -15,3 +15,5 @@ backups/
 data/*.sqlite*
 data/*.server.lock
 artifacts/
+
+data/mvp-state.json

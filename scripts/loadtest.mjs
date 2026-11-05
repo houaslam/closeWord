@@ -70,8 +70,6 @@ try {
       STATE_FILE: join(directory, "legacy.json"),
       AUTH_FILE: join(directory, "accounts.json"),
       TRUST_PROXY: "true",
-      MAIL_TRANSPORT: "file",
-      MAIL_TEST_DIR: join(directory, "mail"),
       METRICS_TOKEN: "load-test-metrics-only",
       NODE_OPTIONS: "--max-old-space-size=384",
     },
@@ -142,20 +140,6 @@ try {
       ),
     ),
   );
-  const authWork = Promise.all(
-    [0, 1].map((i) =>
-      request(
-        "/api/auth/register",
-        {
-          email: `load-${i}@test.invalid`,
-          nickname: `LoadAccount${i}`,
-          password: "a disposable long load-test passphrase",
-          passwordConfirmation: "a disposable long load-test passphrase",
-        },
-        "198.51.100.253",
-      ),
-    ),
-  );
   for (let wave = 0; wave < 3; wave++) {
     await Promise.all(
       rooms.map(async (r) => {
@@ -196,7 +180,6 @@ try {
     );
     await pause(220);
   }
-  await authWork;
   await Promise.all(
     rooms.map((r) =>
       request(
@@ -234,7 +217,6 @@ try {
     maxMs: Math.round(latencies.at(-1)),
     rssMiB: Math.round(memory / 1048576),
     peakRssMiB: Math.round(Math.max(memory, peakMemory) / 1048576),
-    concurrentPasswordHashes: 2,
     allClientsReceivedResults: true,
     node: process.version,
   };

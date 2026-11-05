@@ -2,7 +2,7 @@ import http from "node:http";
 import { readFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { join, extname, dirname } from "node:path";
+import { join, extname } from "node:path";
 import { databaseFor } from "./storage.mjs";
 import { loadEnvironment, configuration } from "./config.mjs";
 import {
@@ -14,7 +14,6 @@ import {
   authorizedMetrics,
   readJson,
 } from "./operations.mjs";
-import { Accounts } from "./auth.mjs";
 import {
   daily,
   randomTarget,
@@ -24,17 +23,11 @@ import {
 const root = fileURLToPath(new URL(".", import.meta.url));
 loadEnvironment(root);
 const config = configuration();
-const stateFile = process.env.STATE_FILE || join(root, "data", "state.json");
+const stateFile =
+  process.env.STATE_FILE || join(root, "data", "mvp-state.json");
 const database = databaseFor(config.database);
-database.importLegacy({
-  state: stateFile,
-  accounts: process.env.AUTH_FILE || join(dirname(stateFile), "accounts.json"),
-});
+database.importLegacy({ state: stateFile });
 database.claimServer();
-const accounts = new Accounts(
-  process.env.AUTH_FILE || join(dirname(stateFile), "accounts.json"),
-  { database },
-);
 const rooms = new Map(
   database
     .values("rooms")
@@ -87,10 +80,8 @@ function rankWord(target, word) {
     fail(e.message);
   }
 }
-function player(room, token, user) {
+function player(room, token) {
   const p = room.players.find((p) => p.token === token);
-  if (p?.userId && p.userId !== user?.id)
-    fail("Log in to the account that joined this game.", 403);
   if (!p) fail("Join this room first.", 403);
   return p;
 }
@@ -103,7 +94,7 @@ function roomView(r, viewerId) {
     host: r.host,
     turn: r.turn,
     round: r.round,
-    players: r.players.map(({ token, userId, ...p }) => ({
+    players: r.players.map(({ token, ...p }) => ({
       ...p,
       online: r.clients.has(p.id),
       guessCount: r.guesses.filter((g) => g.playerId === p.id).length,
@@ -129,11 +120,7 @@ function emit(r) {
       const body = `data: ${JSON.stringify(roomView(r, playerId))}\n\n`;
       for (const stream of streams) {
         if (stream.destroyed) continue;
-        if (
-          (stream.accountSession &&
-            !accounts.sessionValid(stream.accountSession)) ||
-          stream.writableLength > 262144
-        ) {
+        if (stream.writableLength > 262144) {
           stream.end();
           continue;
         }
@@ -155,11 +142,7 @@ function nextTurn(r) {
     }
   }
 }
-function addPlayer(r, name, user) {
-  if (user) {
-    const existing = r.players.find((p) => p.userId === user.id);
-    if (existing) return existing;
-  }
+function addPlayer(r, name) {
   if (r.status !== "waiting") fail("This game has already started.", 409);
   if (r.players.length >= r.maxPlayers)
     fail(`This room is full (${r.maxPlayers} players).`, 409);
@@ -167,55 +150,13 @@ function addPlayer(r, name, user) {
   const p = {
     id: id(),
     token: id(),
-    name: user?.nickname || name,
-    userId: user?.id,
-    member: Boolean(user),
+    name,
     avatar: r.players.length,
     score: 0,
   };
   r.players.push(p);
   if (!r.host) r.host = p.id;
   return p;
-}
-function saveRoomHistory(r, status = r.status) {
-  if (!r.gameId || !r.participants?.some((p) => p.userId)) return;
-  accounts.recordGame({
-    id: r.gameId,
-    kind: "multiplayer",
-    mode: r.mode,
-    round: r.round,
-    status,
-    startedAt: r.started,
-    finishedAt:
-      status === "finished" || status === "abandoned" ? Date.now() : undefined,
-    word: status === "finished" ? r.target : undefined,
-    winnerId: r.winner,
-    players: r.participants.map((p) => ({
-      ...p,
-      left: !r.players.some((q) => q.id === p.id),
-    })),
-    guesses: r.guesses.map((g) => ({ ...g })),
-  });
-}
-function saveSoloHistory(s, key, status = s.won ? "finished" : "playing") {
-  if (!s.userId) return;
-  accounts.recordGame({
-    id: s.gameId,
-    kind: "solo",
-    mode: s.mode,
-    status,
-    startedAt: s.created,
-    finishedAt:
-      status === "abandoned" ? Date.now() : s.won ? s.finishedAt : undefined,
-    word: s.won ? s.target : undefined,
-    winnerId: s.won ? s.userId : undefined,
-    players: [{ id: s.userId, userId: s.userId, name: s.nickname }],
-    guesses: s.guesses.map((g) => ({
-      ...g,
-      playerId: s.userId,
-      name: s.nickname,
-    })),
-  });
 }
 const rates = new Map();
 const server = http.createServer(async (req, res) => {
@@ -232,7 +173,7 @@ const server = http.createServer(async (req, res) => {
   res.setHeader("Referrer-Policy", "same-origin");
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("Cache-Control", "no-store");
-  if (accounts.secure)
+  if (config.production)
     res.setHeader("Strict-Transport-Security", "max-age=31536000");
   function json(data, status = 200) {
     if (database.inTransaction) return { data, status };
@@ -249,9 +190,7 @@ const server = http.createServer(async (req, res) => {
       return json({ ok: !shuttingDown }, shuttingDown ? 503 : 200);
     if (url.pathname === "/health/ready") {
       const ready =
-        !shuttingDown &&
-        database.statement("SELECT 1 AS ok").get().ok === 1 &&
-        (!config.production || accounts.configured());
+        !shuttingDown && database.statement("SELECT 1 AS ok").get().ok === 1;
       return json({ ready }, ready ? 200 : 503);
     }
     if (url.pathname === "/metrics") {
@@ -266,7 +205,6 @@ const server = http.createServer(async (req, res) => {
     if (shuttingDown) fail("Server is restarting. Please retry shortly.", 503);
     if (url.pathname.startsWith("/api/")) {
       limit(`api:${req.clientIp}`, 240);
-      const user = accounts.user(req);
       if (
         req.headers.origin &&
         (config.production
@@ -282,11 +220,10 @@ const server = http.createServer(async (req, res) => {
       )
         fail("Origin not allowed.", 403);
       if (
-        req.method === "GET" &&
-        (url.pathname.startsWith("/api/auth/") ||
-          url.pathname.startsWith("/api/account"))
+        url.pathname.startsWith("/api/auth/") ||
+        url.pathname.startsWith("/api/account")
       )
-        return json(await accounts.handle(req, res, url));
+        fail("Not found", 404);
       if (req.method === "GET" && url.pathname === "/api/health")
         return json({ ok: true, maxPlayers: 6 });
       if (req.method === "GET" && url.pathname === "/api/leaderboard") {
@@ -308,7 +245,7 @@ const server = http.createServer(async (req, res) => {
       if (req.method === "GET" && url.pathname === "/api/events") {
         const r = rooms.get(url.searchParams.get("code"));
         if (!r) fail("Room not found.", 404);
-        const p = player(r, url.searchParams.get("token"), user);
+        const p = player(r, url.searchParams.get("token"));
         if (
           streamCount >= config.maxStreams ||
           (r.clients.get(p.id)?.size || 0) >= 2
@@ -323,18 +260,10 @@ const server = http.createServer(async (req, res) => {
           "X-Accel-Buffering": "no",
         });
         res.write("retry: 1500\n\n");
-        if (p.userId) res.accountSession = accounts.sessionHash(req);
         if (!r.clients.has(p.id)) r.clients.set(p.id, new Set());
         r.clients.get(p.id).add(res);
         emit(r);
         const heartbeat = setInterval(() => {
-          if (
-            res.accountSession &&
-            !accounts.sessionValid(res.accountSession)
-          ) {
-            res.end();
-            return;
-          }
           res.write(": ping\n\n");
         }, 20000);
         res.on("close", () => {
@@ -359,8 +288,6 @@ const server = http.createServer(async (req, res) => {
       )
         fail("Use application/json.", 415);
       const b = await readJson(req);
-      if (url.pathname.startsWith("/api/auth/"))
-        return json(await accounts.handle(req, res, url, b));
       const result = database.transaction(() => {
         if (url.pathname === "/api/solo/new") {
           limit(`solo-new:${req.clientIp}`, 60);
@@ -389,9 +316,8 @@ const server = http.createServer(async (req, res) => {
             target = r.target;
           }
           const key =
-            mode === "daily" &&
-            (user || /^[a-z0-9-]{8,80}$/i.test(b.device || ""))
-              ? `${user ? "account:" + user.id : "device:" + b.device}:${d.id}`
+            mode === "daily" && /^[a-z0-9-]{8,80}$/i.test(b.device || "")
+              ? `device:${b.device}:${d.id}`
               : id();
           if (!solos.has(key) && solos.size >= config.maxSolos)
             fail("Server is busy. Try again later.", 503);
@@ -402,16 +328,11 @@ const server = http.createServer(async (req, res) => {
               hints: 0,
               mode,
               won: false,
-              userId: user?.id,
-              nickname: user?.nickname,
               gameId: id(),
               created: Date.now(),
             });
           persist();
           const s = solos.get(key);
-          if (s.userId && s.userId !== user?.id)
-            fail("Please log in to continue this puzzle.", 403);
-          saveSoloHistory(s, key);
           return json({
             token: key,
             ...s,
@@ -426,8 +347,6 @@ const server = http.createServer(async (req, res) => {
         ) {
           const s = solos.get(b.token);
           if (!s) fail("Start a new puzzle.", 404);
-          if (s.userId && s.userId !== user?.id)
-            fail("Please log in to continue this puzzle.", 403);
           if (s.won) fail("You already solved this puzzle.");
           limit(`solo-guess:${b.token}`, 120);
           if (s.guesses.length >= config.maxGuesses)
@@ -447,7 +366,6 @@ const server = http.createServer(async (req, res) => {
           if (hint) s.hints++;
           s.won = rank === 1;
           if (s.won) s.finishedAt = Date.now();
-          saveSoloHistory(s, b.token);
           persist();
           return json({
             ...s,
@@ -483,7 +401,7 @@ const server = http.createServer(async (req, res) => {
         }
         if (url.pathname === "/api/rooms" || url.pathname === "/api/match") {
           limit(`room-create:${req.clientIp}`, 20, 3600000);
-          const name = user?.nickname || cleanName(b.name);
+          const name = cleanName(b.name);
           if (!name) fail("Choose a nickname.");
           const mode = b.mode === "race" ? "race" : "turn";
           const maxPlayers = b.maxPlayers === undefined ? 6 : b.maxPlayers;
@@ -521,7 +439,7 @@ const server = http.createServer(async (req, res) => {
             };
             rooms.set(code, r);
           }
-          const p = addPlayer(r, name, user);
+          const p = addPlayer(r, name);
           emit(r);
           return json({
             token: p.token,
@@ -539,10 +457,8 @@ const server = http.createServer(async (req, res) => {
         const action = match[2];
         if (action === "join") {
           limit(`room-join:${req.clientIp}`, 60);
-          let p =
-            r.players.find((p) => user && p.userId === user.id) ||
-            r.players.find((p) => !p.userId && p.token === b.token);
-          if (!p) p = addPlayer(r, user?.nickname || cleanName(b.name), user);
+          let p = r.players.find((p) => p.token === b.token);
+          if (!p) p = addPlayer(r, cleanName(b.name));
           emit(r);
           return json({
             token: p.token,
@@ -550,7 +466,7 @@ const server = http.createServer(async (req, res) => {
             room: roomView(r, p.id),
           });
         }
-        const p = player(r, b.token, user);
+        const p = player(r, b.token);
         if (action === "start") {
           if (p.id !== r.host) fail("Only the host can start.", 403);
           if (r.status !== "waiting") fail("Game already started.");
@@ -559,12 +475,6 @@ const server = http.createServer(async (req, res) => {
           r.turn = r.players[0].id;
           r.started = Date.now();
           r.gameId = id();
-          r.participants = r.players.map((p) => ({
-            id: p.id,
-            userId: p.userId,
-            name: p.name,
-          }));
-          saveRoomHistory(r);
         } else if (action === "guess") {
           if (r.status !== "playing") fail("The game is not in progress.");
           if (r.mode === "turn" && r.turn !== p.id)
@@ -606,7 +516,6 @@ const server = http.createServer(async (req, res) => {
                 time: now,
               });
           } else if (r.mode === "turn") nextTurn(r);
-          saveRoomHistory(r);
         } else if (action === "skip") {
           if (r.status !== "playing" || r.mode !== "turn" || p.id !== r.turn)
             fail("You cannot skip now.");
@@ -627,8 +536,6 @@ const server = http.createServer(async (req, res) => {
           r.clients.get(p.id)?.forEach((s) => s.end());
           r.clients.delete(p.id);
           if (r.host === p.id) r.host = r.players[0]?.id;
-          if (r.status === "playing")
-            saveRoomHistory(r, r.players.length < 2 ? "abandoned" : "playing");
           if (r.status === "playing" && r.players.length < 2) {
             r.status = "waiting";
             r.guesses = [];
@@ -704,18 +611,15 @@ function cleanup() {
     const cutoff = Date.now() - 7 * 86400000;
     for (const [key, room] of rooms) {
       if (room.created < cutoff && !room.clients.size) {
-        if (room.status === "playing") saveRoomHistory(room, "abandoned");
         rooms.delete(key);
       }
     }
     for (const [key, solo] of solos) {
       if (solo.created < cutoff) {
-        if (!solo.won) saveSoloHistory(solo, key, "abandoned");
         solos.delete(key);
       }
     }
     persist();
-    accounts.prune();
   });
 }
 cleanup();
@@ -736,7 +640,6 @@ async function shutdown(signal) {
   }, 30000);
   timer.unref();
   await new Promise((resolve) => server.close(resolve));
-  await accounts.drain();
   persist();
   database.close();
   metrics.loop.disable();

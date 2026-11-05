@@ -5,7 +5,6 @@ chmodSync(".secrets", 0o700);
 for (const [name, value] of [
   ["backup.key", randomBytes(32)],
   ["metrics.token", randomBytes(32).toString("hex")],
-  ["resend_api_key", ""],
 ]) {
   const file = `.secrets/${name}`;
   if (!existsSync(file))

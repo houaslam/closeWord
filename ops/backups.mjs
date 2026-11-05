@@ -113,7 +113,7 @@ export async function restoreBackup(source, destination, keyFile) {
       if (db.prepare("PRAGMA integrity_check").get().integrity_check !== "ok")
         throw Error("Restored database failed integrity validation.");
       db.exec(
-        `BEGIN IMMEDIATE; DELETE FROM auth_sessions; DELETE FROM auth_challenges; UPDATE metadata SET value='' WHERE key='writer_owner'; UPDATE metadata SET value='0' WHERE key='writer_seen'; COMMIT; PRAGMA wal_checkpoint(TRUNCATE);`,
+        `BEGIN IMMEDIATE; UPDATE metadata SET value='' WHERE key='writer_owner'; UPDATE metadata SET value='0' WHERE key='writer_seen'; COMMIT; PRAGMA wal_checkpoint(TRUNCATE);`,
       );
     } finally {
       db.close();

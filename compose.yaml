@@ -6,13 +6,10 @@ services:
     environment:
       NODE_ENV: production
       PUBLIC_ORIGIN: https://${DOMAIN:?Set DOMAIN to the public hostname}
-      EMAIL_FROM: ${EMAIL_FROM:?Set EMAIL_FROM to a verified sender}
-      RESEND_API_KEY_FILE: /run/secrets/resend_api_key
       METRICS_TOKEN_FILE: /run/secrets/metrics_token
-      COOKIE_SECURE: "true"
       TRUST_PROXY: "true"
-      DATABASE_PATH: /data/closeword.sqlite
-    secrets: [resend_api_key, metrics_token]
+      DATABASE_PATH: /data/mvp.sqlite
+    secrets: [metrics_token]
     volumes: [game_data:/data]
     read_only: true
     tmpfs: [/tmp]
@@ -41,7 +38,7 @@ services:
     restart: unless-stopped
     command: [node, scripts/backup-loop.mjs]
     environment:
-      DATABASE_PATH: /data/closeword.sqlite
+      DATABASE_PATH: /data/mvp.sqlite
       BACKUP_DIR: /backups
       BACKUP_KEY_FILE: /run/secrets/backup_key
     secrets: [backup_key]
@@ -65,8 +62,6 @@ services:
       app:
         condition: service_healthy
 secrets:
-  resend_api_key:
-    file: ./.secrets/resend_api_key
   metrics_token:
     file: ./.secrets/metrics.token
   backup_key:

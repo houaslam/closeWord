@@ -3,10 +3,6 @@ import { mkdirSync, chmodSync, readFileSync, existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { randomBytes } from "node:crypto";
 const tables = {
-  users: "users",
-  sessions: "auth_sessions",
-  challenges: "auth_challenges",
-  limits: "rate_limits",
   rooms: "rooms",
   solos: "solos",
   records: "leaderboard",
@@ -31,28 +27,15 @@ export class Storage {
       throw Error("Database schema is newer than this application.");
     this.db.exec(`BEGIN IMMEDIATE;
    CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY,value TEXT NOT NULL) STRICT;
-   CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY,payload TEXT NOT NULL CHECK(json_valid(payload)),email TEXT GENERATED ALWAYS AS(json_extract(payload,'$.email')) STORED UNIQUE,nickname TEXT GENERATED ALWAYS AS(lower(json_extract(payload,'$.nickname'))) STORED UNIQUE) STRICT;
-   CREATE TABLE IF NOT EXISTS auth_sessions(id TEXT PRIMARY KEY,payload TEXT NOT NULL CHECK(json_valid(payload)),user_id TEXT GENERATED ALWAYS AS(json_extract(payload,'$.userId')) STORED,expires_at INTEGER GENERATED ALWAYS AS(json_extract(payload,'$.expiresAt')) STORED) STRICT;
-   CREATE INDEX IF NOT EXISTS sessions_user ON auth_sessions(user_id);
-   CREATE INDEX IF NOT EXISTS sessions_expiry ON auth_sessions(expires_at);
-   CREATE TABLE IF NOT EXISTS auth_challenges(id TEXT PRIMARY KEY,payload TEXT NOT NULL CHECK(json_valid(payload)),email TEXT GENERATED ALWAYS AS(json_extract(payload,'$.email')) STORED,expires_at INTEGER GENERATED ALWAYS AS(json_extract(payload,'$.expiresAt')) STORED) STRICT;
-   CREATE INDEX IF NOT EXISTS challenges_email ON auth_challenges(email);
-   CREATE TABLE IF NOT EXISTS rate_limits(id TEXT PRIMARY KEY,payload TEXT NOT NULL CHECK(json_valid(payload))) STRICT;
    CREATE TABLE IF NOT EXISTS rooms(id TEXT PRIMARY KEY,payload TEXT NOT NULL CHECK(json_valid(payload))) STRICT;
    CREATE TABLE IF NOT EXISTS solos(id TEXT PRIMARY KEY,payload TEXT NOT NULL CHECK(json_valid(payload))) STRICT;
    CREATE TABLE IF NOT EXISTS leaderboard(id TEXT PRIMARY KEY,payload TEXT NOT NULL CHECK(json_valid(payload))) STRICT;
-   CREATE TABLE IF NOT EXISTS game_history(id TEXT PRIMARY KEY,payload TEXT NOT NULL CHECK(json_valid(payload)),started_at INTEGER NOT NULL) STRICT;
-   CREATE TABLE IF NOT EXISTS game_participants(game_id TEXT NOT NULL REFERENCES game_history(id) ON DELETE CASCADE,user_id TEXT NOT NULL,outcome TEXT NOT NULL,guess_count INTEGER NOT NULL,PRIMARY KEY(game_id,user_id)) STRICT;
-   CREATE INDEX IF NOT EXISTS history_user ON game_participants(user_id,outcome);
    PRAGMA user_version=1; COMMIT;`);
     this.statements = new Map();
     this.snapshots = new Map();
     this.inTransaction = false;
     this.commitJobs = [];
     this.closed = false;
-    this.key =
-      this.meta("otp_key") ||
-      this.setMeta("otp_key", randomBytes(32).toString("hex"));
     this.dailyKey =
       this.meta("daily_key") ||
       this.setMeta("daily_key", randomBytes(32).toString("hex"));
@@ -108,7 +91,7 @@ export class Storage {
     return value;
   }
   table(name) {
-    if (!Object.values(tables).includes(name) && name !== "game_history")
+    if (!Object.values(tables).includes(name))
       throw Error("Unknown database collection");
     return name;
   }
@@ -148,114 +131,16 @@ export class Storage {
     });
     this.snapshots.set(name, next);
   }
-  loadAuth() {
-    const data = { key: this.key };
-    for (const key of ["users", "sessions", "challenges", "limits"]) {
-      const rows = this.values(tables[key]);
-      data[key] = rows.map((r) => r.value);
-      this.snapshots.set(
-        key,
-        new Map(rows.map((r) => [r.id, JSON.stringify(r.value)])),
-      );
-    }
-    return data;
-  }
-  saveAuth(data) {
+  importLegacy({ state } = {}) {
+    if (!state || !existsSync(state) || this.meta("imported_state")) return;
+    const data = JSON.parse(readFileSync(state, "utf8"));
     this.transaction(() => {
-      for (const key of ["users", "sessions", "challenges", "limits"])
-        this.sync(
-          key,
-          data[key].map((v) => [
-            key === "sessions" ? v.hash : key === "limits" ? v.key : v.id,
-            v,
-          ]),
-        );
+      for (const r of data.rooms || []) this.put("rooms", r.code, r);
+      for (const [id, solo] of data.solos || []) this.put("solos", id, solo);
+      for (const [i, record] of (data.records || []).entries())
+        this.put("leaderboard", `legacy-${i}`, record);
+      this.setMeta("imported_state", state);
     });
-  }
-  recordGame(game) {
-    this.transaction(() => {
-      this.statement(
-        "INSERT INTO game_history(id,payload,started_at) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload,started_at=excluded.started_at",
-      ).run(game.id, JSON.stringify(game), game.startedAt);
-      this.statement("DELETE FROM game_participants WHERE game_id=?").run(
-        game.id,
-      );
-      for (const p of game.players.filter((p) => p.userId)) {
-        const outcome = p.left
-          ? "left"
-          : game.status === "finished"
-            ? game.winnerId === p.id
-              ? "won"
-              : "lost"
-            : game.status === "abandoned"
-              ? "abandoned"
-              : "playing";
-        const count = game.guesses.filter(
-          (g) => game.kind === "solo" || g.playerId === p.id,
-        ).length;
-        this.statement(
-          "INSERT INTO game_participants(game_id,user_id,outcome,guess_count) VALUES(?,?,?,?)",
-        ).run(game.id, p.userId, outcome, count);
-      }
-    });
-  }
-  history(userId, { result = "all", limit = 21, offset = 0 } = {}) {
-    return this.statement(
-      `SELECT g.payload FROM game_history g JOIN game_participants p ON p.game_id=g.id WHERE p.user_id=? AND (?='all' OR p.outcome=?) ORDER BY g.started_at DESC,g.id DESC LIMIT ? OFFSET ?`,
-    )
-      .all(userId, result, result, limit, offset)
-      .map((r) => JSON.parse(r.payload));
-  }
-  historyGame(userId, id) {
-    const row = this.statement(
-      "SELECT g.payload FROM game_history g JOIN game_participants p ON p.game_id=g.id WHERE p.user_id=? AND g.id=?",
-    ).get(userId, id);
-    return row ? JSON.parse(row.payload) : null;
-  }
-  summary(userId) {
-    const row = this.statement(
-      "SELECT count(*) AS games,coalesce(sum(outcome='won'),0) AS wins,coalesce(sum(outcome='lost'),0) AS losses,coalesce(sum(outcome IN ('left','abandoned')),0) AS left,coalesce(sum(outcome='playing'),0) AS playing,coalesce(sum(guess_count),0) AS totalGuesses FROM game_participants WHERE user_id=?",
-    ).get(userId);
-    return {
-      ...row,
-      winRate:
-        row.wins + row.losses
-          ? Math.round((row.wins / (row.wins + row.losses)) * 100)
-          : 0,
-    };
-  }
-  importLegacy({ accounts, state } = {}) {
-    for (const [kind, file] of Object.entries({ accounts, state })) {
-      if (!file || !existsSync(file) || this.meta(`imported_${kind}`)) continue;
-      const data = JSON.parse(readFileSync(file, "utf8"));
-      chmodSync(file, 0o600);
-      this.transaction(() => {
-        if (kind === "accounts") {
-          if (this.values("users").length)
-            throw Error(
-              "Cannot import legacy accounts over an existing database.",
-            );
-          if (data.key) {
-            this.key = data.key;
-            this.setMeta("otp_key", data.key);
-          }
-          for (const key of ["users", "sessions", "challenges", "limits"])
-            for (const v of data[key] || [])
-              this.put(
-                tables[key],
-                key === "sessions" ? v.hash : key === "limits" ? v.key : v.id,
-                v,
-              );
-          for (const g of data.games || []) this.recordGame(g);
-        } else {
-          for (const r of data.rooms || []) this.put("rooms", r.code, r);
-          for (const [id, s] of data.solos || []) this.put("solos", id, s);
-          for (const [i, r] of (data.records || []).entries())
-            this.put("leaderboard", `legacy-${i}`, r);
-        }
-        this.setMeta(`imported_${kind}`, file);
-      });
-    }
   }
   integrity() {
     return this.db.prepare("PRAGMA quick_check").get().quick_check === "ok";

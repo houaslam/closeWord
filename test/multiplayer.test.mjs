@@ -99,8 +99,6 @@ before(async () => {
       STATE_FILE: file,
       DATABASE_PATH: join(dir, "closeword.sqlite"),
       NODE_ENV: "test",
-      MAIL_TRANSPORT: "file",
-      MAIL_TEST_DIR: join(dir, "mail"),
       TRUST_PROXY: "true",
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -304,113 +302,6 @@ test("public matchmaking respects the chosen capacity and separates room sizes",
     maxPlayers: 2,
   });
   assert.notEqual(d.room.code, a.room.code);
-});
-test("verified accounts own multiplayer results, solo history and room credentials across devices", async () => {
-  const password = "a secure integration test passphrase";
-  function client() {
-    let cookie = "";
-    return {
-      call: async (path, body, status = 200) => {
-        const res = await fetch(base + path, {
-          method: body === undefined ? "GET" : "POST",
-          headers: {
-            ...(body === undefined
-              ? {}
-              : { "Content-Type": "application/json" }),
-            Cookie: cookie,
-            "X-Forwarded-For": "192.0.2.200",
-          },
-          body: body === undefined ? undefined : JSON.stringify(body),
-        });
-        const data = await res.json();
-        assert.equal(res.status, status, JSON.stringify(data));
-        if (res.headers.get("set-cookie"))
-          cookie = res.headers.get("set-cookie").split(";")[0];
-        return data;
-      },
-    };
-  }
-  async function register(email, nickname) {
-    const c = client();
-    const challenge = await c.call("/api/auth/register", {
-      email,
-      nickname,
-      password,
-      passwordConfirmation: password,
-    });
-    assert.equal((await c.call("/api/auth/me")).user, null);
-    const mail = JSON.parse(
-      readFileSync(join(dir, "mail", `${challenge.challengeId}.json`)),
-    );
-    await c.call("/api/auth/verify", {
-      challengeId: challenge.challengeId,
-      code: mail.code,
-    });
-    return c;
-  }
-  const alice = await register("alice@test.example", "Alice");
-  const bob = await register("bob@test.example", "Bob");
-  const created = await alice.call("/api/rooms", {
-    mode: "race",
-    maxPlayers: 2,
-    name: "Spoofed",
-  });
-  const code = created.room.code;
-  assert.equal(created.room.players[0].name, "Alice");
-  assert.equal(created.room.players[0].userId, undefined);
-  const joined = await bob.call(`/api/rooms/${code}/join`, { name: "Ignored" });
-  assert.equal(joined.room.players[1].name, "Bob");
-  await request(`/api/rooms/${code}/start`, { token: created.token }, 403);
-  await alice.call(`/api/rooms/${code}/start`, { token: created.token });
-  const target = secret(code);
-  await alice.call(`/api/rooms/${code}/guess`, {
-    token: created.token,
-    word: target === "ocean" ? "coffee" : "ocean",
-  });
-  await bob.call(`/api/rooms/${code}/guess`, {
-    token: joined.token,
-    word: target,
-  });
-  const aliceHistory = await alice.call("/api/account/games");
-  const bobHistory = await bob.call("/api/account/games");
-  assert.equal(aliceHistory.games[0].outcome, "lost");
-  assert.equal(bobHistory.games[0].outcome, "won");
-  assert.equal(aliceHistory.games[0].winner, "Bob");
-  assert.equal(aliceHistory.games[0].word, target);
-  assert.equal((await alice.call("/api/account")).stats.losses, 1);
-  const details = await alice.call(
-    `/api/account/games/${aliceHistory.games[0].id}`,
-  );
-  assert.equal(details.game.players.length, 2);
-  assert.equal(details.game.guesses.length, 2);
-  const secondDevice = client();
-  await secondDevice.call("/api/auth/login", {
-    email: "alice@test.example",
-    password,
-  });
-  const recovered = await secondDevice.call(`/api/rooms/${code}/join`, {});
-  assert.equal(recovered.playerId, created.playerId);
-  const challenge = await alice.call("/api/challenge", { word: "ocean" });
-  const solo = await alice.call("/api/solo/new", {
-    mode: "challenge",
-    code: challenge.code,
-  });
-  await request("/api/solo/guess", { token: solo.token, word: "ocean" }, 403);
-  await bob.call("/api/solo/guess", { token: solo.token, word: "ocean" }, 403);
-  await alice.call("/api/solo/guess", { token: solo.token, word: "ocean" });
-  assert.equal((await alice.call("/api/account")).stats.wins, 1);
-  const dailyA = await alice.call("/api/solo/new", {
-    mode: "daily",
-    device: "browser-a-device",
-  });
-  const dailyB = await secondDevice.call("/api/solo/new", {
-    mode: "daily",
-    device: "browser-b-device",
-  });
-  assert.equal(dailyA.token, dailyB.token);
-  await secondDevice.call("/api/auth/logout", {});
-  assert.equal((await secondDevice.call("/api/auth/me")).user, null);
-  assert.equal((await alice.call("/api/auth/me")).user.nickname, "Alice");
 });
 test("HTTP rejects malformed objects, oversize bodies, wrong media types and protects operational endpoints", async () => {
   for (const body of ["null", "[]", "{broken"]) {

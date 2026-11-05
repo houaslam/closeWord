@@ -1,16 +1,15 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { DatabaseSync } from "node:sqlite";
-test("graceful restart and crash recovery preserve accounts, room seats, guesses and results", async () => {
+test("graceful restart and crash recovery preserve name-only room seats, guesses and results", async () => {
   const dir = mkdtempSync(join(tmpdir(), "cw-restart-")),
     file = join(dir, "db.sqlite"),
     base = "http://127.0.0.1:3013";
-  let server,
-    cookie = "";
+  let server;
   const start = async () => {
     server = spawn(process.execPath, ["server.mjs"], {
       cwd: new URL("..", import.meta.url),
@@ -21,9 +20,6 @@ test("graceful restart and crash recovery preserve accounts, room seats, guesses
         HOST: "127.0.0.1",
         DATABASE_PATH: file,
         STATE_FILE: join(dir, "legacy.json"),
-        AUTH_FILE: join(dir, "legacy-accounts.json"),
-        MAIL_TRANSPORT: "file",
-        MAIL_TEST_DIR: join(dir, "mail"),
       },
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -51,38 +47,25 @@ test("graceful restart and crash recovery preserve accounts, room seats, guesses
     server.kill(signal);
     await exited;
   };
-  const api = async (path, body, authenticated = true) => {
+  const api = async (path, body) => {
     const response = await fetch(base + path, {
       method: body === undefined ? "GET" : "POST",
       headers: {
         "Content-Type": "application/json",
-        Cookie: authenticated ? cookie : "",
       },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
     const data = await response.json();
     assert.equal(response.status, 200, JSON.stringify(data));
-    if (response.headers.get("set-cookie"))
-      cookie = response.headers.get("set-cookie").split(";")[0];
     return data;
   };
   try {
     await start();
-    const password = "a disposable restart test passphrase";
-    const pending = await api("/api/auth/register", {
-      email: "restart@test.invalid",
-      nickname: "Restart",
-      password,
-      passwordConfirmation: password,
+    const host = await api("/api/rooms", {
+      name: "Host",
+      mode: "turn",
+      maxPlayers: 2,
     });
-    const mail = JSON.parse(
-      readFileSync(join(dir, "mail", pending.challengeId + ".json")),
-    );
-    await api("/api/auth/verify", {
-      challengeId: pending.challengeId,
-      code: mail.code,
-    });
-    const host = await api("/api/rooms", { mode: "turn", maxPlayers: 2 });
     const code = host.room.code;
     const guest = await api(
       `/api/rooms/${code}/join`,
@@ -101,8 +84,9 @@ test("graceful restart and crash recovery preserve accounts, room seats, guesses
     });
     await stop("SIGTERM");
     await start();
-    assert.equal((await api("/api/auth/me")).user.nickname, "Restart");
-    const recovered = await api(`/api/rooms/${code}/join`, {});
+    const recovered = await api(`/api/rooms/${code}/join`, {
+      token: host.token,
+    });
     assert.equal(recovered.playerId, host.playerId);
     assert.equal(recovered.room.guesses.length, 1);
     assert.equal(recovered.room.turn, guest.playerId);
@@ -111,14 +95,14 @@ test("graceful restart and crash recovery preserve accounts, room seats, guesses
       { token: guest.token, word: target },
       false,
     );
-    assert.equal((await api("/api/account")).stats.losses, 1);
     await stop("SIGKILL");
     db = new DatabaseSync(file);
     db.prepare("UPDATE metadata SET value='0' WHERE key='writer_seen'").run();
     db.close();
     await start();
-    assert.equal((await api("/api/account")).stats.losses, 1);
-    const restored = await api(`/api/rooms/${code}/join`, {});
+    const restored = await api(`/api/rooms/${code}/join`, {
+      token: host.token,
+    });
     assert.equal(restored.room.status, "finished");
     assert.equal(restored.room.winner, guest.playerId);
     assert.equal(restored.room.answer, target);

@@ -4,9 +4,7 @@ import { spawn } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { randomBytes, scryptSync } from "node:crypto";
-import { Storage } from "../storage.mjs";
-test("production HTTP enforces origin, secure cookie names, operational auth and log redaction", async () => {
+test("production HTTP supports name-only play without email, enforces origin, operational auth and log redaction", async () => {
   const dir = mkdtempSync(join(tmpdir(), "cw-prod-http-")),
     file = join(dir, "db.sqlite"),
     base = "http://127.0.0.1:3014",
@@ -14,26 +12,6 @@ test("production HTTP enforces origin, secure cookie names, operational auth and
   let server,
     output = "",
     errors = "";
-  const password = "a disposable production HTTP passphrase",
-    email = "private-http@test.invalid",
-    salt = randomBytes(16).toString("hex");
-  const db = new Storage(file);
-  db.put("users", "fixture", {
-    id: "fixture",
-    email,
-    nickname: "Fixture",
-    createdAt: Date.now(),
-    password:
-      salt +
-      ":" +
-      scryptSync(password, salt, 32, {
-        N: 131072,
-        r: 8,
-        p: 1,
-        maxmem: 256 * 1024 * 1024,
-      }).toString("hex"),
-  });
-  db.close();
   try {
     server = spawn(process.execPath, ["server.mjs"], {
       cwd: new URL("..", import.meta.url),
@@ -43,14 +21,8 @@ test("production HTTP enforces origin, secure cookie names, operational auth and
         PORT: "3014",
         HOST: "127.0.0.1",
         PUBLIC_ORIGIN: origin,
-        COOKIE_SECURE: "true",
-        MAIL_TRANSPORT: "resend",
-        RESEND_API_KEY: "test-only-not-a-real-key",
-        RESEND_API_KEY_FILE: "",
-        EMAIL_FROM: "Game <accounts@test.invalid>",
         DATABASE_PATH: file,
         STATE_FILE: join(dir, "legacy.json"),
-        AUTH_FILE: join(dir, "accounts.json"),
         METRICS_TOKEN: "private-test-metrics",
         METRICS_TOKEN_FILE: "",
       },
@@ -74,40 +46,26 @@ test("production HTTP enforces origin, secure cookie names, operational auth and
         reject(Error(`Server exited ${code}: ${errors}`));
       });
     });
-    const login = (headers = {}) =>
-      fetch(base + "/api/auth/login", {
+    const create = (headers = {}) =>
+      fetch(base + "/api/rooms", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...headers },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ name: "PrivatePlayer", maxPlayers: 6 }),
       });
-    assert.equal((await login()).status, 403);
-    assert.equal((await login({ Origin: "https://evil.invalid" })).status, 403);
-    const response = await login({ Origin: origin });
-    assert.equal(response.status, 200);
-    const cookie = response.headers.get("set-cookie");
-    assert.match(cookie, /^__Host-cw_session=/);
-    assert.match(cookie, /HttpOnly/);
-    assert.match(cookie, /SameSite=Lax/);
-    assert.match(cookie, /Secure/);
-    assert.match(response.headers.get("Strict-Transport-Security"), /max-age/);
-    assert.equal((await response.json()).user.nickname, "Fixture");
-    const who = await fetch(base + "/api/auth/me", {
-      headers: { Cookie: cookie.split(";")[0] },
-    });
-    assert.equal((await who.json()).user.nickname, "Fixture");
-    const renamedCookie = cookie
-      .split(";")[0]
-      .replace("__Host-cw_session", "cw_session");
+    assert.equal((await create()).status, 403);
     assert.equal(
-      (
-        await (
-          await fetch(base + "/api/auth/me", {
-            headers: { Cookie: renamedCookie },
-          })
-        ).json()
-      ).user,
-      null,
+      (await create({ Origin: "https://evil.invalid" })).status,
+      403,
     );
+    const response = await create({ Origin: origin });
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("set-cookie"), null);
+    assert.match(response.headers.get("Strict-Transport-Security"), /max-age/);
+    const created = await response.json();
+    assert.equal(created.room.players[0].name, "PrivatePlayer");
+    assert.equal(created.room.maxPlayers, 6);
+    assert.equal((await fetch(base + "/api/auth/me")).status, 404);
+    assert.equal((await fetch(base + "/api/account")).status, 404);
     assert.equal((await fetch(base + "/metrics")).status, 404);
     assert.equal(
       (
@@ -123,19 +81,8 @@ test("production HTTP enforces origin, secure cookie names, operational auth and
     assert.equal(metrics.status, 200);
     assert.match(await metrics.text(), /closeword_requests_total/);
     assert.equal((await fetch(base + "/health/ready")).status, 200);
-    const logout = await fetch(base + "/api/auth/logout", {
-      method: "POST",
-      headers: {
-        Origin: origin,
-        "Content-Type": "application/json",
-        Cookie: cookie.split(";")[0],
-      },
-      body: "{}",
-    });
-    assert.equal(logout.status, 200);
-    assert.match(logout.headers.get("set-cookie"), /^__Host-cw_session=;/);
-    assert.ok(!output.includes(password));
-    assert.ok(!output.includes(email));
+    assert.ok(!output.includes("PrivatePlayer"));
+    assert.ok(!output.includes(created.token));
     assert.ok(!output.includes("private-test-metrics"));
     assert.ok(output.includes("requestId"));
   } finally {

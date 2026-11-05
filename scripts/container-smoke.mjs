@@ -42,12 +42,6 @@ try {
     ...restrictions,
     "-e",
     "PUBLIC_ORIGIN=https://smoke.test.invalid",
-    "-e",
-    "EMAIL_FROM=Game <accounts@test.invalid>",
-    "-e",
-    "RESEND_API_KEY=test-only-not-a-real-provider-key",
-    "-e",
-    "COOKIE_SECURE=true",
     image,
   ]);
   running = true;
@@ -102,16 +96,16 @@ try {
       "--rm",
       ...restrictions,
       "-e",
-      "PUBLIC_ORIGIN=https://smoke.test.invalid",
+      "PUBLIC_ORIGIN=http://smoke.test.invalid",
       image,
     ]);
   } catch (e) {
-    rejected = String(e.stderr || "").includes("RESEND_API_KEY");
+    rejected = String(e.stderr || "").includes("HTTPS PUBLIC_ORIGIN");
   }
   assert.equal(
     rejected,
     true,
-    "Production must reject missing email credentials",
+    "Production must reject an insecure public origin",
   );
   const report = {
     image,
@@ -120,7 +114,7 @@ try {
     readOnlyRoot: true,
     capabilitiesDropped: true,
     productionFailsClosed: true,
-    liveEmailVerified: false,
+    accountsRequired: false,
   };
   mkdirSync("artifacts", { recursive: true });
   writeFileSync(

@@ -41,52 +41,22 @@ test("SQLite transactions roll back related state and do not publish rolled-back
     rmSync(dir, { recursive: true, force: true });
   }
 });
-test("legacy JSON migration is atomic, idempotent and preserves users, rooms and histories", () => {
+test("legacy guest games import once without modifying their source", () => {
   const dir = temp(),
-    db = new Storage(join(dir, "db.sqlite"));
+    db = new Storage(join(dir, "db.sqlite")),
+    state = join(dir, "state.json");
   try {
-    const accounts = join(dir, "accounts.json"),
-      state = join(dir, "state.json");
-    writeFileSync(
-      accounts,
-      JSON.stringify({
-        key: "legacy-key",
-        users: [
-          {
-            id: "a",
-            email: "a@test.example",
-            nickname: "Alice",
-            password: "hash",
-          },
-        ],
-        sessions: [],
-        challenges: [],
-        limits: [],
-        games: [
-          {
-            id: "game",
-            status: "finished",
-            kind: "solo",
-            mode: "daily",
-            startedAt: 1,
-            winnerId: "a",
-            players: [{ id: "a", userId: "a", name: "Alice" }],
-            guesses: [],
-          },
-        ],
-      }),
-    );
-    writeFileSync(
-      state,
-      JSON.stringify({ rooms: [{ code: "ABCDEF" }], solos: [], records: [] }),
-    );
-    db.importLegacy({ accounts, state });
-    db.importLegacy({ accounts, state });
-    assert.equal(db.values("users").length, 1);
-    assert.equal(db.get("rooms", "ABCDEF").code, "ABCDEF");
-    assert.equal(db.summary("a").wins, 1);
-    assert.equal(db.meta("otp_key"), "legacy-key");
-    assert.ok(readFileSync(accounts, "utf8").includes("legacy-key"));
+    const original = JSON.stringify({
+      rooms: [{ code: "ABCDEF" }],
+      solos: [],
+      records: [],
+    });
+    writeFileSync(state, original);
+    db.importLegacy({ state });
+    db.importLegacy({ state });
+    assert.equal(db.values("rooms").length, 1);
+    assert.equal(readFileSync(state, "utf8"), original);
+    assert.throws(() => db.values("users"), /Unknown/);
   } finally {
     db.close();
     rmSync(dir, { recursive: true, force: true });
@@ -115,7 +85,7 @@ test("database fencing prevents two servers from writing even after lease takeov
     rmSync(dir, { recursive: true, force: true });
   }
 });
-test("encrypted online backup restores consistent data, revokes sessions, rejects tampering and overwrites", async () => {
+test("encrypted online backup restores consistent data, rejects tampering and overwrites", async () => {
   const dir = temp(),
     file = join(dir, "db.sqlite"),
     db = new Storage(file),
@@ -124,24 +94,17 @@ test("encrypted online backup restores consistent data, revokes sessions, reject
     restored = join(dir, "restored.sqlite");
   writeFileSync(key, randomBytes(32), { mode: 0o600 });
   try {
-    db.put("users", "u", {
-      id: "u",
-      email: "u@test.example",
-      nickname: "User",
-    });
-    db.put("auth_sessions", "s", {
-      hash: "s",
-      userId: "u",
-      expiresAt: Date.now() + 100000,
+    db.put("rooms", "ABCDEF", {
+      code: "ABCDEF",
+      players: [{ name: "PrivatePlayer" }],
     });
     await encryptedBackup(file, archive, key);
     assert.equal(statSync(archive).mode & 0o777, 0o600);
-    assert.ok(!readFileSync(archive).includes(Buffer.from("u@test.example")));
+    assert.ok(!readFileSync(archive).includes(Buffer.from("PrivatePlayer")));
     await restoreBackup(archive, restored, key);
     const recovered = new Storage(restored);
     assert.equal(recovered.integrity(), true);
-    assert.equal(recovered.values("users").length, 1);
-    assert.equal(recovered.values("auth_sessions").length, 0);
+    assert.equal(recovered.values("rooms").length, 1);
     recovered.close();
     await assert.rejects(
       () => restoreBackup(archive, restored, key),
@@ -158,7 +121,7 @@ test("encrypted online backup restores consistent data, revokes sessions, reject
     rmSync(dir, { recursive: true, force: true });
   }
 });
-test("production refuses missing credentials, HTTP, insecure cookies and test email transport", () => {
+test("production requires HTTPS but needs no email provider or account credentials", () => {
   const saved = { ...process.env };
   try {
     process.env.NODE_ENV = "production";
@@ -166,16 +129,7 @@ test("production refuses missing credentials, HTTP, insecure cookies and test em
     delete process.env.RESEND_API_KEY;
     delete process.env.EMAIL_FROM;
     assert.throws(configuration, /HTTPS/);
-    process.env.PUBLIC_ORIGIN = "https://game.test.example";
-    assert.throws(configuration, /RESEND/);
-    process.env.RESEND_API_KEY = "test-only-no-live-delivery";
-    process.env.EMAIL_FROM = "Game <accounts@game.test.invalid>";
-    process.env.COOKIE_SECURE = "false";
-    assert.throws(configuration, /secure cookies/);
-    process.env.COOKIE_SECURE = "true";
-    process.env.MAIL_TRANSPORT = "file";
-    assert.throws(configuration, /Resend/);
-    process.env.MAIL_TRANSPORT = "resend";
+    process.env.PUBLIC_ORIGIN = "https://game.test.invalid";
     assert.equal(configuration().production, true);
   } finally {
     for (const key of Object.keys(process.env))
@@ -199,11 +153,7 @@ test("concurrent backups never overwrite or remove a completed archive", async (
     archive = join(dir, "shared.enc");
   writeFileSync(key, randomBytes(32), { mode: 0o600 });
   try {
-    db.put("users", "u", {
-      id: "u",
-      email: "concurrent@test.invalid",
-      nickname: "Concurrent",
-    });
+    db.put("rooms", "ABCDEF", { code: "ABCDEF" });
     const outcomes = await Promise.allSettled([
       encryptedBackup(file, archive, key),
       encryptedBackup(file, archive, key),
@@ -211,7 +161,7 @@ test("concurrent backups never overwrite or remove a completed archive", async (
     assert.equal(outcomes.filter((r) => r.status === "fulfilled").length, 1);
     await restoreBackup(archive, join(dir, "restored.sqlite"), key);
     const restored = new Storage(join(dir, "restored.sqlite"));
-    assert.equal(restored.values("users").length, 1);
+    assert.equal(restored.values("rooms").length, 1);
     restored.close();
   } finally {
     db.close();

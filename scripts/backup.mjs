@@ -11,7 +11,7 @@ const target =
 if (!process.env.BACKUP_KEY_FILE)
   throw Error("Set BACKUP_KEY_FILE to a private 32-byte key file.");
 await encryptedBackup(
-  resolve(process.env.DATABASE_PATH || "data/closeword.sqlite"),
+  resolve(process.env.DATABASE_PATH || "data/mvp.sqlite"),
   target,
   process.env.BACKUP_KEY_FILE,
 );

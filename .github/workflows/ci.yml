@@ -20,7 +20,6 @@ jobs:
       - run: docker compose config --quiet
         env:
           DOMAIN: ci.example.com
-          EMAIL_FROM: CloseWord <accounts@example.net>
       - run: docker build -t closeword:ci .
       - run: npm run test:container
         env:

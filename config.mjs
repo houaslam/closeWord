@@ -4,7 +4,7 @@ export function loadEnvironment(root) {
   const env = resolve(root, ".env");
   if (!["test", "production"].includes(process.env.NODE_ENV) && existsSync(env))
     process.loadEnvFile(env);
-  for (const name of ["RESEND_API_KEY", "METRICS_TOKEN"]) {
+  for (const name of ["METRICS_TOKEN"]) {
     const file = process.env[`${name}_FILE`];
     if (file) {
       if (process.env[name])
@@ -30,18 +30,6 @@ export function configuration() {
   if (production) {
     if (parsed.protocol !== "https:")
       throw Error("Production requires an HTTPS PUBLIC_ORIGIN.");
-    if (
-      !process.env.RESEND_API_KEY ||
-      !process.env.EMAIL_FROM ||
-      process.env.EMAIL_FROM.includes(".example")
-    )
-      throw Error(
-        "Production requires RESEND_API_KEY and a verified EMAIL_FROM.",
-      );
-    if (process.env.MAIL_TRANSPORT && process.env.MAIL_TRANSPORT !== "resend")
-      throw Error("Production only supports the Resend email transport.");
-    if (process.env.COOKIE_SECURE === "false")
-      throw Error("Production requires secure cookies.");
   }
   return {
     production,
@@ -52,7 +40,7 @@ export function configuration() {
       process.env.DATABASE_PATH ||
         resolve(
           dirname(process.env.STATE_FILE || "data/state.json"),
-          "closeword.sqlite",
+          "mvp.sqlite",
         ),
     ),
     trustProxy: process.env.TRUST_PROXY === "true",

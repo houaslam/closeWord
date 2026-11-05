@@ -23,14 +23,6 @@ checks.push({
   check: "HTTPS public origin",
   ok: Boolean(process.env.PUBLIC_ORIGIN?.startsWith("https://")),
 });
-checks.push({
-  check: "Email credentials present (delivery not verified)",
-  ok: Boolean(
-    process.env.RESEND_API_KEY &&
-    process.env.EMAIL_FROM &&
-    !process.env.EMAIL_FROM.includes(".example"),
-  ),
-});
 if (!process.argv.includes("--application-only"))
   checks.push({
     check: "Encrypted backup key",
@@ -70,7 +62,6 @@ console.log(
     {
       ready: checks.every((c) => c.ok),
       externalChecks: [
-        "Real email delivery",
         "Public TLS certificate",
         "Off-host backup copy and restore",
         "Operator alerts",

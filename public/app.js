@@ -38,8 +38,6 @@ function applySettings() {
   localStorage.setItem("cw-settings", JSON.stringify(settings));
 }
 applySettings();
-let account = null,
-  emailAvailable = false;
 let nickname = localStorage.getItem("cw-name") || "",
   gameMode = localStorage.getItem("cw-mode") || "turn";
 let playerLimit = Number(localStorage.getItem("cw-player-limit")) || 6;
@@ -82,7 +80,7 @@ function errorText(message) {
   else toast(message);
 }
 function header(mp = false, back = false) {
-  return `<header><div class="header-inner"><div class="header-side">${mp || back ? `<a class="icon-btn" href="${room ? "/multiplayer" : "/"}" aria-label="${room ? "Leave" : "Back to the game"}" ${room ? 'data-leave="true"' : ""}>${icon("back")}</a>` : `<button class="icon-btn" data-modal="help" aria-label="How to play">${icon("help")}</button><a class="icon-btn" href="/challenge" aria-label="Create a challenge">${icon("plus")}</a>`}</div><a class="brand" href="/"><strong>CloseWord</strong><span>${mp ? "MULTIPLAYER · SIX PLAYERS" : "GUESS THE SECRET WORD"}</span></a><div class="header-side"><button class="icon-btn" data-modal="stats" aria-label="${mp ? "Your stats" : "Statistics"}">${icon("stats")}</button>${mp ? `<button class="icon-btn" data-modal="leaderboard" aria-label="Leaderboard">${icon("trophy")}</button>` : ""}<button class="icon-btn" data-modal="settings" aria-label="Settings">${icon("settings")}</button></div></div></header>${accountNav()}`;
+  return `<header><div class="header-inner"><div class="header-side">${mp || back ? `<a class="icon-btn" href="${room ? "/multiplayer" : "/"}" aria-label="${room ? "Leave" : "Back to the game"}" ${room ? 'data-leave="true"' : ""}>${icon("back")}</a>` : `<button class="icon-btn" data-modal="help" aria-label="How to play">${icon("help")}</button><a class="icon-btn" href="/challenge" aria-label="Create a challenge">${icon("plus")}</a>`}</div><a class="brand" href="/"><strong>CloseWord</strong><span>${mp ? "MULTIPLAYER · SIX PLAYERS" : "GUESS THE SECRET WORD"}</span></a><div class="header-side"><button class="icon-btn" data-modal="stats" aria-label="${mp ? "Your stats" : "Statistics"}">${icon("stats")}</button>${mp ? `<button class="icon-btn" data-modal="leaderboard" aria-label="Leaderboard">${icon("trophy")}</button>` : ""}<button class="icon-btn" data-modal="settings" aria-label="Settings">${icon("settings")}</button></div></div></header>`;
 }
 const rankLabel = (r) => (r > 30000 ? "30000+" : String(r));
 function guessRow(g, small = false) {
@@ -197,7 +195,7 @@ function leaderboardSection() {
 function renderLobby(joinCode) {
   app.innerHTML =
     header(true) +
-    `<main class="mp-main"><h1>${joinCode ? "Join your friends" : "Six minds, one word"}</h1><p class="intro">${joinCode ? "Choose a nickname and join the room." : "Race friends or other players to guess the secret word.<br>First to find it wins — up to six can play."}</p>${!nickname ? `<form id="nickname-form"><label class="field-label" for="nickname">Choose a nickname</label><div class="guess-form"><input id="nickname" name="nickname" placeholder="Your nickname" autocomplete="nickname" maxlength="24" required><button class="square" aria-label="Continue">${icon("arrow")}</button></div><div class="under">Play anonymously — no account needed.</div></form><p id="form-error" class="error empty-error" role="alert"></p>` : `<div class="profile"><span class="avatar">🦁</span><div><strong>${esc(nickname)}</strong><small>${account ? "Verified account" : "Guest · unrated"}</small></div>${account ? '<a class="text-btn" href="/account">my games</a>' : '<button class="text-btn" id="switch-name">switch</button>'}</div>${joinCode ? `<div class="status-banner">Room ${esc(joinCode)} · up to 6 players</div><button class="primary" id="join-invite">Join game ${icon("arrow")}</button>` : `<div class="mode-label"><b>1</b> CHOOSE A GAME MODE</div><div class="modes" role="radiogroup" aria-label="Game mode"><button class="mode ${gameMode === "turn" ? "active" : ""}" data-mode="turn" role="radio" aria-checked="${gameMode === "turn"}"><span class="emoji">⚔️</span><strong>Turn-by-turn</strong><small>Take turns on the same word</small>${gameMode === "turn" ? '<span class="check">✓</span>' : ""}</button><button class="mode ${gameMode === "race" ? "active" : ""}" data-mode="race" role="radio" aria-checked="${gameMode === "race"}"><span class="emoji">🏁</span><strong>Speed race</strong><small>Everyone guesses — fastest wins</small>${gameMode === "race" ? '<span class="check">✓</span>' : ""}</button></div><div class="player-limit"><label for="player-limit"><strong>Number of players</strong><small>Room limit, including you</small></label><select id="player-limit">${[2, 3, 4, 5, 6].map((n) => `<option value="${n}" ${n === playerLimit ? "selected" : ""}>${n} players</option>`).join("")}</select></div><div class="mode-label"><b>2</b> START A GAME</div><button class="action-card solid" id="random-game"><span class="action-icon">${icon("bolt")}</span><span><strong>Find other players</strong><small>Get matched and play together</small></span><span class="capacity" style="margin-left:auto">${playerLimit} players</span></button><button class="action-card" id="create-game"><span class="action-icon">${icon("link")}</span><span><strong>Invite friends</strong><small>Create a private game and share the link</small></span><span class="trailing">${icon("arrow")}</span></button><div class="or">OR JOIN WITH A CODE</div><form id="join-form" class="guess-form"><input name="code" id="join-code" placeholder="ENTER CODE (E.G. K7P2QM)" aria-label="Room code" maxlength="6" autocapitalize="characters" required><button class="square" aria-label="Join">${icon("arrow")}</button></form>`}<p id="form-error" class="error empty-error" role="alert"></p>`}${leaderboardSection()}</main>`;
+    `<main class="mp-main"><h1>${joinCode ? "Join your friends" : "Six minds, one word"}</h1><p class="intro">${joinCode ? "Choose a nickname and join the room." : "Race friends or other players to guess the secret word.<br>First to find it wins — up to six can play."}</p>${!nickname ? `<form id="nickname-form"><label class="field-label" for="nickname">Choose a nickname</label><div class="guess-form"><input id="nickname" name="nickname" placeholder="Your nickname" autocomplete="nickname" maxlength="24" required><button class="square" aria-label="Continue">${icon("arrow")}</button></div><div class="under">Play anonymously — no account needed.</div></form><p id="form-error" class="error empty-error" role="alert"></p>` : `<div class="profile"><span class="avatar">🦁</span><div><strong>${esc(nickname)}</strong><small>Ready to play</small></div><button class="text-btn" id="switch-name">switch</button></div>${joinCode ? `<div class="status-banner">Room ${esc(joinCode)} · up to 6 players</div><button class="primary" id="join-invite">Join game ${icon("arrow")}</button>` : `<div class="mode-label"><b>1</b> CHOOSE A GAME MODE</div><div class="modes" role="radiogroup" aria-label="Game mode"><button class="mode ${gameMode === "turn" ? "active" : ""}" data-mode="turn" role="radio" aria-checked="${gameMode === "turn"}"><span class="emoji">⚔️</span><strong>Turn-by-turn</strong><small>Take turns on the same word</small>${gameMode === "turn" ? '<span class="check">✓</span>' : ""}</button><button class="mode ${gameMode === "race" ? "active" : ""}" data-mode="race" role="radio" aria-checked="${gameMode === "race"}"><span class="emoji">🏁</span><strong>Speed race</strong><small>Everyone guesses — fastest wins</small>${gameMode === "race" ? '<span class="check">✓</span>' : ""}</button></div><div class="player-limit"><label for="player-limit"><strong>Number of players</strong><small>Room limit, including you</small></label><select id="player-limit">${[2, 3, 4, 5, 6].map((n) => `<option value="${n}" ${n === playerLimit ? "selected" : ""}>${n} players</option>`).join("")}</select></div><div class="mode-label"><b>2</b> START A GAME</div><button class="action-card solid" id="random-game"><span class="action-icon">${icon("bolt")}</span><span><strong>Find other players</strong><small>Get matched and play together</small></span><span class="capacity" style="margin-left:auto">${playerLimit} players</span></button><button class="action-card" id="create-game"><span class="action-icon">${icon("link")}</span><span><strong>Invite friends</strong><small>Create a private game and share the link</small></span><span class="trailing">${icon("arrow")}</span></button><div class="or">OR JOIN WITH A CODE</div><form id="join-form" class="guess-form"><input name="code" id="join-code" placeholder="ENTER CODE (E.G. K7P2QM)" aria-label="Room code" maxlength="6" autocapitalize="characters" required><button class="square" aria-label="Join">${icon("arrow")}</button></form>`}<p id="form-error" class="error empty-error" role="alert"></p>`}${leaderboardSection()}</main>`;
   bindCommon();
   loadLeaders();
   $("#nickname-form")?.addEventListener("submit", (e) => {
@@ -356,7 +354,7 @@ function renderRoom() {
         const b =
           p.bestRank ?? (gs.length ? Math.min(...gs.map((g) => g.rank)) : null);
         const guessCount = p.guessCount ?? gs.length;
-        return `<div class="player-card ${p.id === me ? "me" : ""} ${playing && p.id === room.turn && room.mode === "turn" ? "current" : ""}"><span class="avatar" style="background:${["#e5b8e3", "#b9cce7", "#efd0ac", "#c2dab5", "#d1c4e8", "#e8c0ac"][p.avatar]}">${avatars[p.avatar]}</span><div class="player-details"><strong class="player-name">${esc(p.name)} ${p.id === me ? '<span class="you">you</span>' : ""}</strong><div class="player-meta">${waiting ? `${p.id === room.host ? "Host" : p.member ? "Member" : "Guest"}${p.online ? " · online" : " · away"}` : b ? `Best ${rankLabel(b)} · ${guessCount} ${guessCount === 1 ? "guess" : "guesses"}` : "No guesses yet"}</div></div>${p.score ? `<span class="you">${p.score} ★</span>` : ""}</div>`;
+        return `<div class="player-card ${p.id === me ? "me" : ""} ${playing && p.id === room.turn && room.mode === "turn" ? "current" : ""}"><span class="avatar" style="background:${["#e5b8e3", "#b9cce7", "#efd0ac", "#c2dab5", "#d1c4e8", "#e8c0ac"][p.avatar]}">${avatars[p.avatar]}</span><div class="player-details"><strong class="player-name">${esc(p.name)} ${p.id === me ? '<span class="you">you</span>' : ""}</strong><div class="player-meta">${waiting ? `${p.id === room.host ? "Host" : "Player"}${p.online ? " · online" : " · away"}` : b ? `Best ${rankLabel(b)} · ${guessCount} ${guessCount === 1 ? "guess" : "guesses"}` : "No guesses yet"}</div></div>${p.score ? `<span class="you">${p.score} ★</span>` : ""}</div>`;
       })
       .join(
         "",
@@ -433,7 +431,6 @@ async function copy(text) {
   }
 }
 function bindCommon() {
-  $("#logout-account")?.addEventListener("click", logoutAccount);
   document
     .querySelectorAll("[data-modal]")
     .forEach((b) => (b.onclick = () => showModal(b.dataset.modal)));
@@ -474,10 +471,6 @@ function modal(html, classes = "") {
   $(".modal .close").focus();
 }
 function showModal(type, tab = "how") {
-  if (type === "stats" && account) {
-    navigate("/account");
-    return;
-  }
   if (type === "settings") {
     modal(
       `<h2>Settings</h2><label class="setting"><span><strong>Dark ${room || location.pathname.includes("multiplayer") ? "mode" : "Mode"}</strong><small>${room ? "Switch between light and dark" : "Reduce eye strain in low light"}</small></span><input class="switch" type="checkbox" id="dark-toggle" aria-label="Dark mode" ${settings.dark ? "checked" : ""}></label>${location.pathname.includes("multiplayer") ? `<label class="setting"><span><strong>Sound effects</strong><small>Play sounds during multiplayer games</small></span><input class="switch" type="checkbox" id="sound-toggle" aria-label="Sound effects" ${settings.sound ? "checked" : ""}></label>` : `<div class="setting" style="display:block"><strong>Hints</strong><small>The hint’s position will be ${settings.difficulty === "easy" ? "half the position of your closest word" : settings.difficulty === "medium" ? "one less than your closest word" : "random"}</small><div class="difficulty">${["easy", "medium", "hard"].map((d) => `<button data-difficulty="${d}" class="${settings.difficulty === d ? "active" : ""}">${d[0].toUpperCase() + d.slice(1)}</button>`).join("")}</div></div>`}<label class="setting"><span><strong>High Contrast</strong><small>Use a high-contrast palette (blue / orange / gray)</small></span><input class="switch" type="checkbox" id="contrast-toggle" aria-label="High contrast" ${settings.contrast ? "checked" : ""}></label><div class="fine">CloseWord · A daily word game<br>Six-player edition</div>`,
@@ -745,26 +738,6 @@ function onboard() {
 }
 async function route() {
   const path = location.pathname;
-  if (
-    [
-      "/signup",
-      "/login",
-      "/verify",
-      "/forgot-password",
-      "/reset-password",
-    ].includes(path)
-  ) {
-    renderAuthPage(path);
-    return;
-  }
-  if (path === "/account") {
-    await renderAccountPage();
-    return;
-  }
-  if (path.startsWith("/account/games/")) {
-    await renderGameDetails(path.split("/").at(-1));
-    return;
-  }
   document.title = path.includes("multiplayer")
     ? "Multiplayer — CloseWord"
     : "CloseWord — Daily Word Game";
@@ -818,14 +791,4 @@ document.addEventListener("keydown", (e) => {
     }
   }
 });
-window.addEventListener("storage", async (e) => {
-  if (e.key === "cw-auth-event") {
-    events?.close();
-    events = null;
-    room = null;
-    credentials = null;
-    await refreshAccount();
-    route();
-  }
-});
-refreshAccount().then(route);
+route();
