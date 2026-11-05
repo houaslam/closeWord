@@ -1,0 +1,17 @@
+node_modules/
+data/state.json
+*.log
+.DS_Store
+
+data/accounts.json
+data/accounts.json.tmp
+data/state.json.tmp
+.env
+.env.*
+!.env.example
+
+.secrets/
+backups/
+data/*.sqlite*
+data/*.server.lock
+artifacts/

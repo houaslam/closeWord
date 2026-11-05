@@ -1,0 +1,29 @@
+name: Verify production package
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24.22.2"
+          package-manager-cache: false
+      - run: npm ci
+      - run: npm run format:check
+      - run: npm test
+      - run: npm run loadtest
+      - run: npm run secrets:init
+      - run: docker compose config --quiet
+        env:
+          DOMAIN: ci.example.com
+          EMAIL_FROM: CloseWord <accounts@example.net>
+      - run: docker build -t closeword:ci .
+      - run: npm run test:container
+        env:
+          SMOKE_IMAGE: closeword:ci
+      - name: Validate HTTPS proxy configuration
+        run: docker run --rm -e DOMAIN=ci.example.com -v "$PWD/ops/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine@sha256:f6228111e5fafa1a5238258d0858e103f10599b8d1659a146e7726681a002bb9 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile

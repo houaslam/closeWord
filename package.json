@@ -1,0 +1,25 @@
+{
+  "name": "closeword-six",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node scripts/start.mjs",
+    "dev": "node --watch scripts/start.mjs",
+    "test": "node --test test/*.test.mjs",
+    "loadtest": "node scripts/loadtest.mjs",
+    "secrets:init": "node scripts/init-secrets.mjs",
+    "backup": "node scripts/backup.mjs",
+    "restore": "node scripts/restore.mjs",
+    "readiness": "node scripts/readiness.mjs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test:container": "node scripts/container-smoke.mjs"
+  },
+  "engines": {
+    "node": ">=24.22.2 <25"
+  },
+  "devDependencies": {
+    "prettier": "3.9.10"
+  }
+}

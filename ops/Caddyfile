@@ -1,0 +1,9 @@
+{$DOMAIN} {
+	header -Server
+	request_body {
+		max_size 8KB
+	}
+	reverse_proxy app:3000 {
+		flush_interval -1
+	}
+}

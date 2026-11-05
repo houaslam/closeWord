@@ -1,0 +1,10 @@
+{
+  "model": "glove-wiki-gigaword-50",
+  "source": "https://github.com/piskvorky/gensim-data/releases/download/glove-wiki-gigaword-50/glove-wiki-gigaword-50.gz",
+  "dimensions": 50,
+  "vocabulary": 50000,
+  "files": {
+    "words.json": "fe527105c82e9656095f8cb2af7e75b471ddeb5221fb58d5383645abcc04c957",
+    "vectors.bin": "cd9b61f7e9ad47c8303ee310f20fc77fc14e897c495ce7555e9d19fa322740a1"
+  }
+}

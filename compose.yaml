@@ -1,0 +1,78 @@
+services:
+  app:
+    build: .
+    image: closeword:local
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PUBLIC_ORIGIN: https://${DOMAIN:?Set DOMAIN to the public hostname}
+      EMAIL_FROM: ${EMAIL_FROM:?Set EMAIL_FROM to a verified sender}
+      RESEND_API_KEY_FILE: /run/secrets/resend_api_key
+      METRICS_TOKEN_FILE: /run/secrets/metrics_token
+      COOKIE_SECURE: "true"
+      TRUST_PROXY: "true"
+      DATABASE_PATH: /data/closeword.sqlite
+    secrets: [resend_api_key, metrics_token]
+    volumes: [game_data:/data]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 768m
+    cpus: 2
+    pids_limit: 128
+    stop_grace_period: 40s
+  proxy:
+    image: caddy:2-alpine@sha256:f6228111e5fafa1a5238258d0858e103f10599b8d1659a146e7726681a002bb9
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN to the public hostname}
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./ops/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+    security_opt: [no-new-privileges:true]
+  backups:
+    image: closeword:local
+    restart: unless-stopped
+    command: [node, scripts/backup-loop.mjs]
+    environment:
+      DATABASE_PATH: /data/closeword.sqlite
+      BACKUP_DIR: /backups
+      BACKUP_KEY_FILE: /run/secrets/backup_key
+    secrets: [backup_key]
+    healthcheck:
+      test:
+        [
+          CMD,
+          node,
+          -e,
+          "const fs=require('node:fs');process.exit(Date.now()-Number(fs.readFileSync('/tmp/backup-success','utf8'))<93600000?0:1)",
+        ]
+      interval: 5m
+      timeout: 5s
+      start_period: 30s
+    volumes: [game_data:/data:ro, encrypted_backups:/backups]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    depends_on:
+      app:
+        condition: service_healthy
+secrets:
+  resend_api_key:
+    file: ./.secrets/resend_api_key
+  metrics_token:
+    file: ./.secrets/metrics.token
+  backup_key:
+    file: ./.secrets/backup.key
+volumes:
+  game_data:
+  encrypted_backups:
+  caddy_data:
+  caddy_config:

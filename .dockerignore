@@ -1,0 +1,16 @@
+.git
+node_modules
+data/state.json
+test
+screenshots
+
+data/accounts.json
+data/*.tmp
+.env
+.env.*
+
+.secrets/
+backups/
+data/*.sqlite*
+data/*.server.lock
+artifacts/
