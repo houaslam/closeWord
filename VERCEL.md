@@ -32,6 +32,17 @@ node --env-file=.env.vercel.local scripts/vercel-check.mjs
 
 With credentials already exported in your shell, use `npm run vercel:check`. The check verifies HTTPS access, a temporary write/read/delete, Lua support, and bundled word artifacts. It prints no credentials. Placeholder values are not real credentials; a successful build alone does not prove that the database is connected. The code is prepared, but live deployment remains unverified until your actual database is connected and the Preview passes.
 
+## If the deployed game is unavailable
+
+Open `/health/ready`. A 503 response now includes a safe diagnostic code without exposing credentials:
+
+- `MISSING_REDIS_CONFIG`: connect Upstash and add a complete REST URL/token pair to the affected Vercel environment, then redeploy.
+- `INVALID_PUBLIC_ORIGIN`: enable system environment variables or correct the public HTTPS origin.
+- `INVALID_REDIS_URL`: use the database's HTTPS origin rather than a dashboard link or URL with a path.
+- `MISSING_WORD_ARTIFACTS`: rebuild the latest main branch so the bundled word files are included.
+
+A trailing root `/` or surrounding whitespace in copied deployment URLs is normalized automatically. Credentials embedded in URLs and non-root paths remain rejected. Function logs include the initialization stage and safe diagnostic code; the readiness response includes the deployment commit when Vercel supplies it.
+
 ## How multiplayer works on Vercel
 
 Each room and solo game lives in shared Redis. Atomic compare-and-set scripts enforce capacity and turn order, commit one winner, and award leaderboard points once even when players submit simultaneously. Matchmaking, rate limits, connection limits and presence are shared across instances. No local SQLite file or permanent in-memory room cache is used in Redis mode.

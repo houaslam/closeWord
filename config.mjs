@@ -26,12 +26,24 @@ export function configuration() {
     (process.env.VERCEL_ENV === "production"
       ? process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL
       : process.env.VERCEL_URL);
-  const origin =
+  const originInput =
     process.env.PUBLIC_ORIGIN ||
     (generatedHost ? `https://${generatedHost}` : `http://localhost:${port}`);
-  const parsed = new URL(origin);
+  let parsed;
+  try {
+    parsed = new URL(originInput.trim());
+  } catch {
+    throw Error(
+      "PUBLIC_ORIGIN must be an origin without a path or trailing slash.",
+    );
+  }
+  const origin = parsed.origin;
   if (
-    parsed.origin !== origin ||
+    parsed.pathname !== "/" ||
+    parsed.search ||
+    parsed.hash ||
+    parsed.username ||
+    parsed.password ||
     !["http:", "https:"].includes(parsed.protocol)
   )
     throw Error(
@@ -51,14 +63,16 @@ export function configuration() {
   const upstash = Boolean(
     process.env.UPSTASH_REDIS_REST_URL || process.env.UPSTASH_REDIS_REST_TOKEN,
   );
-  const redisUrl =
+  let redisUrl = (
     (upstash
       ? process.env.UPSTASH_REDIS_REST_URL
-      : process.env.KV_REST_API_URL) || "";
-  const redisToken =
+      : process.env.KV_REST_API_URL) || ""
+  ).trim();
+  const redisToken = (
     (upstash
       ? process.env.UPSTASH_REDIS_REST_TOKEN
-      : process.env.KV_REST_API_TOKEN) || "";
+      : process.env.KV_REST_API_TOKEN) || ""
+  ).trim();
   if (storage === "redis") {
     if (!redisUrl || !redisToken)
       throw Error(
@@ -74,11 +88,16 @@ export function configuration() {
       process.env.NODE_ENV === "test" &&
       ["localhost", "127.0.0.1", "[::1]"].includes(endpoint.hostname);
     if (
-      endpoint.origin !== redisUrl ||
+      endpoint.pathname !== "/" ||
+      endpoint.search ||
+      endpoint.hash ||
+      endpoint.username ||
+      endpoint.password ||
       (endpoint.protocol !== "https:" &&
         !(testLoopback && endpoint.protocol === "http:"))
     )
       throw Error("Redis REST URL must be an HTTPS origin without a path.");
+    redisUrl = endpoint.origin;
   }
   const preview = vercel && process.env.VERCEL_ENV !== "production";
   const previewId = createHash("sha256")
