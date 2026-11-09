@@ -38,11 +38,35 @@ export function Icon({ name }) {
   );
 }
 export const rankLabel = (rank) => (rank > 30000 ? "30000+" : String(rank));
-export function GuessRow({ guess: g }) {
-  const fill =
-    g.rank === 1
+const rankFill = (rank) =>
+  !rank
+    ? 0
+    : rank === 1
       ? 100
-      : Math.max(5, Math.min(98, 100 - Math.log10(g.rank) * 21));
+      : Math.max(5, Math.min(98, 100 - Math.log10(rank) * 21));
+export function PlayerProximity({ name, rank }) {
+  return (
+    <div
+      className={`player-proximity ${rank && rank <= 300 ? "hot" : rank && rank <= 1500 ? "warm" : ""}`}
+      role="progressbar"
+      aria-label={`${name} proximity to the secret word`}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={Math.round(rankFill(rank))}
+      aria-valuetext={
+        rank
+          ? rank === 1
+            ? "Secret word found"
+            : `Best rank ${rankLabel(rank)}; lower is closer`
+          : "No guesses yet"
+      }
+    >
+      <span style={{ width: `${rankFill(rank)}%` }} />
+    </div>
+  );
+}
+export function GuessRow({ guess: g }) {
+  const fill = rankFill(g.rank);
   return (
     <div
       className={`guess-row ${g.rank <= 300 ? "hot" : g.rank <= 1500 ? "warm" : ""}`}

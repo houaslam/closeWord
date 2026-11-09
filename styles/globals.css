@@ -774,6 +774,33 @@ input::placeholder {
   min-width: 0;
   flex: 1;
 }
+.player-proximity {
+  height: 8px;
+  margin-top: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--line);
+}
+.player-proximity > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #6b92c8;
+  transition:
+    width 350ms ease,
+    background-color 350ms ease;
+}
+.player-proximity.warm > span {
+  background: #cfaa56;
+}
+.player-proximity.hot > span {
+  background: #72b66c;
+}
+@media (prefers-reduced-motion: reduce) {
+  .player-proximity > span {
+    transition: none;
+  }
+}
 .you {
   color: var(--muted);
   font-size: 10px;

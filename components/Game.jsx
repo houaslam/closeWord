@@ -6,6 +6,7 @@ import {
   Icon,
   avatars,
   rankLabel,
+  PlayerProximity,
   GuessForm,
   GuessRow,
   GuessList,
@@ -737,6 +738,10 @@ export default function Game() {
                           ? `Best ${rankLabel(p.bestRank)} · ${p.guessCount} ${p.guessCount === 1 ? "guess" : "guesses"}`
                           : "No guesses yet"}
                     </div>
+                    <PlayerProximity
+                      name={p.name}
+                      rank={waiting ? null : p.bestRank}
+                    />
                   </div>
                   {p.score > 0 && <span className="you">{p.score} ★</span>}
                 </div>
