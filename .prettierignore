@@ -5,3 +5,6 @@ backups/
 artifacts/
 screenshots/
 package-lock.json
+
+.next/
+.next-dev/

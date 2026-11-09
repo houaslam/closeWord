@@ -11,7 +11,7 @@ test("graceful restart and crash recovery preserve name-only room seats, guesses
     base = "http://127.0.0.1:3013";
   let server;
   const start = async () => {
-    server = spawn(process.execPath, ["server.mjs"], {
+    server = spawn(process.execPath, ["scripts/api-test-server.mjs"], {
       cwd: new URL("..", import.meta.url),
       env: {
         ...process.env,

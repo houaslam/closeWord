@@ -90,7 +90,7 @@ async function until(check) {
   assert.fail("Live clients did not synchronize within 2 seconds");
 }
 before(async () => {
-  processHandle = spawn(process.execPath, ["server.mjs"], {
+  processHandle = spawn(process.execPath, ["scripts/api-test-server.mjs"], {
     cwd: new URL("..", import.meta.url),
     env: {
       ...process.env,
@@ -327,7 +327,7 @@ test("HTTP rejects malformed objects, oversize bodies, wrong media types and pro
   assert.equal((await fetch(base + "/metrics")).status, 404);
   assert.equal((await request("/health/ready")).ready, true);
   assert.equal((await request("/health/live")).ok, true);
-  const headers = await fetch(base + "/");
+  const headers = await fetch(base + "/api/health");
   assert.ok(
     headers.headers
       .get("Content-Security-Policy")

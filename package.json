@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node scripts/start.mjs",
-    "dev": "node --watch scripts/start.mjs",
+    "dev": "node scripts/start.mjs --dev",
     "test": "node --test test/*.test.mjs",
     "loadtest": "node scripts/loadtest.mjs",
     "secrets:init": "node scripts/init-secrets.mjs",
@@ -14,12 +14,18 @@
     "readiness": "node scripts/readiness.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test:container": "node scripts/container-smoke.mjs"
+    "test:container": "node scripts/container-smoke.mjs",
+    "build": "next build --webpack"
   },
   "engines": {
     "node": ">=24.22.2 <25"
   },
   "devDependencies": {
     "prettier": "3.9.10"
+  },
+  "dependencies": {
+    "next": "16.4.5",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
   }
 }

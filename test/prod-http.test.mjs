@@ -13,7 +13,7 @@ test("production HTTP supports name-only play without email, enforces origin, op
     output = "",
     errors = "";
   try {
-    server = spawn(process.execPath, ["server.mjs"], {
+    server = spawn(process.execPath, ["scripts/api-test-server.mjs"], {
       cwd: new URL("..", import.meta.url),
       env: {
         ...process.env,

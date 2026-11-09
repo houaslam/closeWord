@@ -19,7 +19,11 @@ async function request(path, data, ip = "198.51.100.254") {
   const start = performance.now();
   const response = await fetch(base + path, {
     method: data === undefined ? "GET" : "POST",
-    headers: { "Content-Type": "application/json", "X-Forwarded-For": ip },
+    headers: {
+      "Content-Type": "application/json",
+      "X-Forwarded-For": ip,
+      Origin: "https://load.test.invalid",
+    },
     body: data === undefined ? undefined : JSON.stringify(data),
   });
   latencies.push(performance.now() - start);
@@ -59,26 +63,39 @@ async function stream(room, p) {
   return state;
 }
 try {
-  server = spawn(process.execPath, ["server.mjs"], {
-    cwd: new URL("..", import.meta.url),
-    env: {
-      ...process.env,
-      NODE_ENV: "test",
-      PORT: String(port),
-      HOST: "127.0.0.1",
-      DATABASE_PATH: join(directory, "game.sqlite"),
-      STATE_FILE: join(directory, "legacy.json"),
-      AUTH_FILE: join(directory, "accounts.json"),
-      TRUST_PROXY: "true",
-      METRICS_TOKEN: "load-test-metrics-only",
-      NODE_OPTIONS: "--max-old-space-size=384",
+  server = spawn(
+    process.execPath,
+    [
+      "node_modules/next/dist/bin/next",
+      "start",
+      "--hostname",
+      "127.0.0.1",
+      "--port",
+      String(port),
+    ],
+    {
+      cwd: new URL("..", import.meta.url),
+      env: {
+        ...process.env,
+        NODE_ENV: "production",
+        PUBLIC_ORIGIN: "https://load.test.invalid",
+        NEXT_TELEMETRY_DISABLED: "1",
+        METRICS_TOKEN_FILE: "",
+        PORT: String(port),
+        HOST: "127.0.0.1",
+        DATABASE_PATH: join(directory, "game.sqlite"),
+        STATE_FILE: join(directory, "legacy.json"),
+        TRUST_PROXY: "true",
+        METRICS_TOKEN: "load-test-metrics-only",
+        NODE_OPTIONS: "--max-old-space-size=384",
+      },
+      stdio: ["ignore", "pipe", "pipe"],
     },
-    stdio: ["ignore", "pipe", "pipe"],
-  });
+  );
   server.stderr.on("data", (chunk) => (stderr += chunk));
   await new Promise((resolve, reject) => {
     server.stdout.on("data", (chunk) => {
-      if (String(chunk).includes("listening")) resolve();
+      if (String(chunk).includes("Ready")) resolve();
     });
     server.once("error", reject);
     server.once("exit", (code) =>

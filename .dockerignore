@@ -14,3 +14,7 @@ backups/
 data/*.sqlite*
 data/*.server.lock
 artifacts/
+
+.next
+.next-dev
+data/mvp-state.json

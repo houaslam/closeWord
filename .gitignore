@@ -17,3 +17,6 @@ data/*.server.lock
 artifacts/
 
 data/mvp-state.json
+
+.next/
+.next-dev/

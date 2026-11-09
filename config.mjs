@@ -7,9 +7,10 @@ export function loadEnvironment(root) {
   for (const name of ["METRICS_TOKEN"]) {
     const file = process.env[`${name}_FILE`];
     if (file) {
-      if (process.env[name])
+      const value = readFileSync(file, "utf8").trim();
+      if (process.env[name] && process.env[name] !== value)
         throw Error(`Configure only ${name} or ${name}_FILE`);
-      process.env[name] = readFileSync(file, "utf8").trim();
+      process.env[name] = value;
     }
   }
 }

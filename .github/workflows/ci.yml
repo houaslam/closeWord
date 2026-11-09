@@ -14,6 +14,7 @@ jobs:
           package-manager-cache: false
       - run: npm ci
       - run: npm run format:check
+      - run: npm run build
       - run: npm test
       - run: npm run loadtest
       - run: npm run secrets:init

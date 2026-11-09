@@ -1,19 +1,18 @@
 import { createHmac, randomInt, createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
-const words = JSON.parse(
-  readFileSync(new URL("./data/words.json", import.meta.url)),
-);
-const buf = readFileSync(new URL("./data/vectors.bin", import.meta.url));
+import { join } from "node:path";
+const words = JSON.parse(readFileSync(join(process.cwd(), "data/words.json")));
+const buf = readFileSync(join(process.cwd(), "data/vectors.bin"));
 const vectors = new Float32Array(
   buf.buffer,
   buf.byteOffset,
   buf.byteLength / 4,
 );
 const manifest = JSON.parse(
-  readFileSync(new URL("./data/manifest.json", import.meta.url)),
+  readFileSync(join(process.cwd(), "data/manifest.json")),
 );
 for (const name of ["words.json", "vectors.bin"]) {
-  const contents = readFileSync(new URL(`./data/${name}`, import.meta.url));
+  const contents = readFileSync(join(process.cwd(), "data", name));
   if (
     createHash("sha256").update(contents).digest("hex") !== manifest.files[name]
   )

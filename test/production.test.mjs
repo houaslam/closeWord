@@ -12,7 +12,7 @@ import { join } from "node:path";
 import { randomBytes } from "node:crypto";
 import { Storage } from "../storage.mjs";
 import { encryptedBackup, restoreBackup } from "../ops/backups.mjs";
-import { configuration } from "../config.mjs";
+import { configuration, loadEnvironment } from "../config.mjs";
 import { daily } from "../engine.mjs";
 const temp = () => mkdtempSync(join(tmpdir(), "cw-production-"));
 test("SQLite transactions roll back related state and do not publish rolled-back events", () => {
@@ -165,6 +165,28 @@ test("concurrent backups never overwrite or remove a completed archive", async (
     restored.close();
   } finally {
     db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("secret-file loading is repeatable across Next.js initialization and retries", () => {
+  const dir = temp(),
+    file = join(dir, "metrics.token"),
+    saved = { ...process.env };
+  try {
+    writeFileSync(file, "test-private-metrics", { mode: 0o600 });
+    process.env.NODE_ENV = "test";
+    process.env.METRICS_TOKEN_FILE = file;
+    delete process.env.METRICS_TOKEN;
+    loadEnvironment(dir);
+    loadEnvironment(dir);
+    assert.equal(process.env.METRICS_TOKEN, "test-private-metrics");
+    process.env.METRICS_TOKEN = "different";
+    assert.throws(() => loadEnvironment(dir), /Configure only/);
+  } finally {
+    for (const key of Object.keys(process.env))
+      if (!(key in saved)) delete process.env[key];
+    Object.assign(process.env, saved);
     rmSync(dir, { recursive: true, force: true });
   }
 });

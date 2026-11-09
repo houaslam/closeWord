@@ -1,6 +1,10 @@
 # Deploying the name-only MVP
 
-The application supports one active Node.js server with persistent SQLite storage. Remote players need a reachable HTTPS hostname. Accounts and email delivery are not part of this branch.
+The application uses Next.js 16 and React 19, with native Next.js API routes. It supports one active Node.js server with persistent SQLite storage. Remote players need a reachable HTTPS hostname. Accounts and email delivery are not part of this branch.
+
+## Vercel status
+
+The Next.js migration is complete, but the server still stores active rooms and live-stream connections in one process and persists data to local SQLite. Vercel deployment requires shared online game storage, distributed event coordination, presence and rate limiting, and recovery across function instances. The current version is intended for a persistent single-server host; uploading it unchanged to Vercel is not supported.
 
 ## Container deployment
 
@@ -13,7 +17,7 @@ Compose exposes Caddy, which manages HTTPS, and keeps the game server private. I
 
 The app container runs as UID 1000 with a read-only root, dropped capabilities, no privilege escalation, resource limits, and a writable data volume. The backend trusts forwarded addresses only because Caddy is the sole public ingress. Do not expose its port directly when `TRUST_PROXY=true`.
 
-For a non-Compose host, use Node.js 24.22.2+ in the 24.x line and set `NODE_ENV=production`, an exact HTTPS `PUBLIC_ORIGIN`, a writable persistent `DATABASE_PATH` (default `data/mvp.sqlite`), and a private `HOST`/`PORT` behind your HTTPS proxy. Set `TRUST_PROXY=true` only with a trusted proxy that appends the real client address. Secrets and data must never be web-served. Local development needs no environment file.
+For a non-Compose host, run `npm ci` and `npm run build`. Start the compiled app with `npm start`. Use Node.js 24.22.2+ in the 24.x line and set `NODE_ENV=production`, an exact HTTPS `PUBLIC_ORIGIN`, a writable persistent `DATABASE_PATH` (default `data/mvp.sqlite`), and a private `HOST`/`PORT` behind your HTTPS proxy. Set `TRUST_PROXY=true` only with a trusted proxy that appends the real client address. Secrets and data must never be web-served. Local development needs no environment file.
 
 ## Verification and operations
 

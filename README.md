@@ -1,14 +1,16 @@
-# CloseWord MVP
+# CloseWord — Next.js MVP
 
 Name-only word games for **2–6 remote players**, with turn-by-turn and speed-race modes. Enter a nickname, choose the room size, and invite friends using a link or room code. The host starts with at least two players. The first player to find the secret word wins; everyone sees the result and can play a rematch.
 
 ## Run locally
 
+Built with **Next.js 16.4.5, React 19.3.1, and JavaScript**. The interface uses React components and Next.js routing; game requests and Server-Sent Events run through native Next.js API routes.
+
 Use Node.js **24.22.2 or newer in the 24.x LTS line** (`nvm use`).
 
 ```sh
 npm ci
-npm start
+npm run dev
 ```
 
 Open [the multiplayer lobby](http://localhost:3000/multiplayer). No accounts, email provider, or `.env` file are needed for local play. The server binds to this machine by default. A localhost invite cannot reach another device; use a public HTTPS deployment for remote friends, as described in [PRODUCTION.md](PRODUCTION.md).
@@ -28,15 +30,31 @@ The host chooses a capacity from two to six, enforced by the server. Matchmaking
 
 Rooms, guesses, solo progress and nickname leaderboard entries persist in SQLite with WAL, full synchronous commits and transactional updates. Run **one active server** per database. Writer leases fence stale processes after takeover; an abrupt crash can require up to 30 seconds before restart. Inactive games expire after seven days. This MVP has no personal account history.
 
+## Project structure
+
+- `pages/`: Next.js pages, document, global application wrapper, and API routes.
+- `components/`: React game screens, dialogs, and shared controls.
+- `lib/game-service.mjs`: server-only multiplayer and solo game service.
+- `lib/client.js`: browser API and local-storage helpers.
+- `styles/globals.css`: the existing game design, now imported by Next.js.
+- `engine.mjs` and `storage.mjs`: semantic word rankings and SQLite persistence.
+
+## Production and Vercel
+
+Build with `npm run build`, then run `PUBLIC_ORIGIN=https://game.yourdomain.com npm start` behind an HTTPS proxy. `npm run dev` provides the local development server. The Docker image builds and runs the production Next.js application.
+
+**This framework migration does not make the multiplayer backend serverless-ready.** The current service still needs one continuously running server and a writable SQLite database. Before Vercel deployment, rooms, presence, rate limits and live-event coordination need shared online storage, plus serverless reconnect handling. Do not deploy this version unchanged to Vercel. No email service is required.
+
 ## Verification
 
 ```sh
+npm run build
 npm test
 npm run loadtest
 npm run format:check
 ```
 
-Tests cover six independent connections, both game modes, capacity limits, race privacy, winner announcement, rematches, reconnects, HTTP validation, origin protection, database fencing, crash recovery, and encrypted backups. The load test uses 20 rooms and 120 connected clients and verifies that every client receives the final result. CI also validates deployment configuration and the container.
+Tests cover six independent connections, both game modes, capacity limits, race privacy, winner announcement, rematches, reconnects, HTTP validation, origin protection, database fencing, crash recovery, and encrypted backups. The load test uses 20 rooms and 120 connected clients and verifies that every client receives the final result. The production Next.js integration test checks native API routes with six live clients, race privacy, winners, reconnects and rematches, as well as React page delivery and per-request script nonces. Build before running the full suite; that integration test is skipped if no production build exists. CI builds first and also validates deployment configuration and the container.
 
 ## Words
 
