@@ -2,9 +2,9 @@
 
 The application uses Next.js 16 and React 19, with native Next.js API routes. It supports one active Node.js server with persistent SQLite storage. Remote players need a reachable HTTPS hostname. Accounts and email delivery are not part of this branch.
 
-## Vercel status
+## Vercel deployment
 
-The Next.js migration is complete, but the server still stores active rooms and live-stream connections in one process and persists data to local SQLite. Vercel deployment requires shared online game storage, distributed event coordination, presence and rate limiting, and recovery across function instances. The current version is intended for a persistent single-server host; uploading it unchanged to Vercel is not supported.
+Use the shared Redis backend described in [VERCEL.md](VERCEL.md). `vercel.json` configures the build, region and function duration. Vercel automatically uses Redis and requires a real Upstash REST URL and read/write token; it refuses SQLite mode. The code is prepared and distributed behavior is tested locally, but the actual database connection and deployed Preview must still be verified. The single-server container instructions below retain SQLite.
 
 ## Container deployment
 

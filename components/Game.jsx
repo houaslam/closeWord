@@ -193,7 +193,7 @@ export default function Game() {
     events.onerror = () => setConnected(false);
     events.onmessage = (e) => {
       try {
-        setRoom(JSON.parse(e.data));
+        updateRoom(JSON.parse(e.data));
       } catch {
         setError("Could not read a game update. Reconnecting…");
       }
@@ -226,6 +226,17 @@ export default function Game() {
   useEffect(() => {
     if (room?.status === "waiting" && dialog === "room-result") setDialog(null);
   }, [room?.status, dialog]);
+  function updateRoom(next) {
+    setRoom((current) =>
+      current &&
+      current.code === next.code &&
+      Number.isInteger(current.revision) &&
+      Number.isInteger(next.revision) &&
+      next.revision < current.revision
+        ? current
+        : next,
+    );
+  }
   async function run(fn) {
     if (lock.current) return;
     lock.current = true;
@@ -280,7 +291,7 @@ export default function Game() {
         token: seat.token,
         ...extra,
       });
-      setRoom(result);
+      updateRoom(result);
       if (action === "guess") setWord("");
       if (action === "rematch") setDialog(null);
     });

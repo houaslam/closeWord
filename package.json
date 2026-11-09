@@ -15,7 +15,9 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test:container": "node scripts/container-smoke.mjs",
-    "build": "next build --webpack"
+    "build": "next build --webpack",
+    "vercel:check": "node scripts/vercel-check.mjs",
+    "test:redis": "node --test test/redis.test.mjs"
   },
   "engines": {
     "node": ">=24.22.2 <25"

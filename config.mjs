@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 export function loadEnvironment(root) {
@@ -19,7 +20,15 @@ export function configuration() {
   const port = Number(process.env.PORT || 3000);
   if (!Number.isInteger(port) || port < 1 || port > 65535)
     throw Error("PORT must be between 1 and 65535.");
-  const origin = process.env.PUBLIC_ORIGIN || `http://localhost:${port}`;
+  const vercel = process.env.VERCEL === "1";
+  const generatedHost =
+    vercel &&
+    (process.env.VERCEL_ENV === "production"
+      ? process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL
+      : process.env.VERCEL_URL);
+  const origin =
+    process.env.PUBLIC_ORIGIN ||
+    (generatedHost ? `https://${generatedHost}` : `http://localhost:${port}`);
   const parsed = new URL(origin);
   if (
     parsed.origin !== origin ||
@@ -32,8 +41,77 @@ export function configuration() {
     if (parsed.protocol !== "https:")
       throw Error("Production requires an HTTPS PUBLIC_ORIGIN.");
   }
+  const storage = process.env.GAME_STORAGE || (vercel ? "redis" : "sqlite");
+  if (!["sqlite", "redis"].includes(storage))
+    throw Error("GAME_STORAGE must be sqlite or redis.");
+  if (vercel && storage !== "redis")
+    throw Error(
+      "Vercel requires GAME_STORAGE=redis; local SQLite is not persistent there.",
+    );
+  const upstash = Boolean(
+    process.env.UPSTASH_REDIS_REST_URL || process.env.UPSTASH_REDIS_REST_TOKEN,
+  );
+  const redisUrl =
+    (upstash
+      ? process.env.UPSTASH_REDIS_REST_URL
+      : process.env.KV_REST_API_URL) || "";
+  const redisToken =
+    (upstash
+      ? process.env.UPSTASH_REDIS_REST_TOKEN
+      : process.env.KV_REST_API_TOKEN) || "";
+  if (storage === "redis") {
+    if (!redisUrl || !redisToken)
+      throw Error(
+        "Redis requires UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN (or the KV_REST_API_URL/TOKEN pair).",
+      );
+    let endpoint;
+    try {
+      endpoint = new URL(redisUrl);
+    } catch {
+      throw Error("Redis REST URL must be a valid HTTPS origin.");
+    }
+    const testLoopback =
+      process.env.NODE_ENV === "test" &&
+      ["localhost", "127.0.0.1", "[::1]"].includes(endpoint.hostname);
+    if (
+      endpoint.origin !== redisUrl ||
+      (endpoint.protocol !== "https:" &&
+        !(testLoopback && endpoint.protocol === "http:"))
+    )
+      throw Error("Redis REST URL must be an HTTPS origin without a path.");
+  }
+  const preview = vercel && process.env.VERCEL_ENV !== "production";
+  const previewId = createHash("sha256")
+    .update(
+      process.env.VERCEL_URL || process.env.VERCEL_GIT_COMMIT_SHA || "local",
+    )
+    .digest("hex")
+    .slice(0, 20);
+  const namespace =
+    process.env.GAME_NAMESPACE ||
+    (vercel
+      ? preview
+        ? `preview-${previewId}`
+        : "production"
+      : "development");
+  if (!/^[a-zA-Z0-9:_-]{1,80}$/.test(namespace))
+    throw Error(
+      "GAME_NAMESPACE must use 1–80 letters, digits, colons, underscores or hyphens.",
+    );
+  const allowedOrigins = new Set([origin]);
+  for (const host of vercel
+    ? [process.env.VERCEL_URL, process.env.VERCEL_BRANCH_URL]
+    : []) {
+    if (host) allowedOrigins.add(`https://${host}`);
+  }
   return {
     production,
+    vercel,
+    storage,
+    redisUrl,
+    redisToken,
+    namespace,
+    allowedOrigins: [...allowedOrigins],
     port,
     origin,
     host: process.env.HOST || (production ? "0.0.0.0" : "127.0.0.1"),
@@ -44,7 +122,7 @@ export function configuration() {
           "mvp.sqlite",
         ),
     ),
-    trustProxy: process.env.TRUST_PROXY === "true",
+    trustProxy: vercel || process.env.TRUST_PROXY === "true",
     maxRooms: 2000,
     maxSolos: 20000,
     maxGuesses: 2000,

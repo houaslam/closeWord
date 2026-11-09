@@ -28,13 +28,14 @@ The MVP defaults to `data/mvp.sqlite`; the account version used `data/closeword.
 
 The host chooses a capacity from two to six, enforced by the server. Matchmaking groups waiting rooms by mode and capacity. Turn-by-turn shares guesses and rotates turns, skipping disconnected players. Speed race keeps each player's guesses private until completion, while showing best ranks and guess counts. Both support reconnects, host transfer, server-authoritative winners, round scores, and rematches. Daily puzzles, practice, and custom challenges are also available.
 
-Rooms, guesses, solo progress and nickname leaderboard entries persist in SQLite with WAL, full synchronous commits and transactional updates. Run **one active server** per database. Writer leases fence stale processes after takeover; an abrupt crash can require up to 30 seconds before restart. Inactive games expire after seven days. This MVP has no personal account history.
+Local rooms, guesses, solo progress and nickname leaderboard entries persist in SQLite with WAL, full synchronous commits and transactional updates. Run **one active server** per SQLite database. Writer leases fence stale processes after takeover; an abrupt crash can require up to 30 seconds before restart. Inactive games expire after seven days. This MVP has no personal account history.
 
 ## Project structure
 
 - `pages/`: Next.js pages, document, global application wrapper, and API routes.
 - `components/`: React game screens, dialogs, and shared controls.
-- `lib/game-service.mjs`: server-only multiplayer and solo game service.
+- `lib/game-service.mjs`: local SQLite multiplayer and solo game service.
+- `lib/redis-game-service.mjs` and `lib/redis-store.mjs`: shared Vercel game storage, atomic updates, presence and live streams.
 - `lib/client.js`: browser API and local-storage helpers.
 - `styles/globals.css`: the existing game design, now imported by Next.js.
 - `engine.mjs` and `storage.mjs`: semantic word rankings and SQLite persistence.
@@ -43,7 +44,9 @@ Rooms, guesses, solo progress and nickname leaderboard entries persist in SQLite
 
 Build with `npm run build`, then run `PUBLIC_ORIGIN=https://game.yourdomain.com npm start` behind an HTTPS proxy. `npm run dev` provides the local development server. The Docker image builds and runs the production Next.js application.
 
-**This framework migration does not make the multiplayer backend serverless-ready.** The current service still needs one continuously running server and a writable SQLite database. Before Vercel deployment, rooms, presence, rate limits and live-event coordination need shared online storage, plus serverless reconnect handling. Do not deploy this version unchanged to Vercel. No email service is required.
+For **Vercel**, follow [VERCEL.md](VERCEL.md) and use [.env.vercel.example](.env.vercel.example). Connect Upstash Redis through Vercel Marketplace, provide its server-only REST URL and read/write token, then redeploy. Redis mode stores rooms, presence, matchmaking and rate limits outside the function instance and rotates live streams with automatic reconnection. Production and Preview data are isolated by default. No email service is required.
+
+The shared backend is implemented and locally tested. Your real database credentials and a successful deployed Preview are still required; a build does not configure those resources automatically.
 
 ## Verification
 
@@ -54,7 +57,7 @@ npm run loadtest
 npm run format:check
 ```
 
-Tests cover six independent connections, both game modes, capacity limits, race privacy, winner announcement, rematches, reconnects, HTTP validation, origin protection, database fencing, crash recovery, and encrypted backups. The load test uses 20 rooms and 120 connected clients and verifies that every client receives the final result. The production Next.js integration test checks native API routes with six live clients, race privacy, winners, reconnects and rematches, as well as React page delivery and per-request script nonces. Build before running the full suite; that integration test is skipped if no production build exists. CI builds first and also validates deployment configuration and the container.
+Tests cover six independent connections, both game modes, capacity limits, race privacy, winner announcement, rematches, reconnects, HTTP validation, origin protection, database fencing, crash recovery, and encrypted backups. The load test uses 20 rooms and 120 connected clients and verifies that every client receives the final result. The production Next.js integration test checks native API routes with six live clients, race privacy, winners, reconnects and rematches, as well as React page delivery and per-request script nonces. Build before running the full suite; that integration test is skipped if no production build exists. CI builds first, supplies real Redis for cross-instance multiplayer tests, and also validates deployment configuration and the container. See [VERCEL.md](VERCEL.md) for deployment-specific verification.
 
 ## Words
 
