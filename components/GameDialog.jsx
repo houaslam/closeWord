@@ -207,6 +207,9 @@ export default function GameDialog({
       <>
         <div style={{ fontSize: 38 }}>{won ? "🎉" : "🏆"}</div>
         <h2>{won ? "You won!" : `${winner?.name || "A player"} won!`}</h2>
+        {room.finishReason === "last-player" && (
+          <p>Last player standing — everyone else left the game.</p>
+        )}
         <p>The secret word was</p>
         <div className="answer">{room.answer?.toUpperCase()}</div>
         <p>

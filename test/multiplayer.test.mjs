@@ -12,14 +12,14 @@ const base = "http://127.0.0.1:3011";
 let processHandle;
 const controllers = [];
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
-async function request(path, body, status = 200) {
+async function request(path, body, status = 200, headers = {}) {
   const response = await fetch(
     base + path,
     body === undefined
       ? {}
       : {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...headers },
           body: JSON.stringify(body),
         },
   );
@@ -57,7 +57,7 @@ async function stream(code, who) {
     { signal: controller.signal },
   );
   assert.equal(response.status, 200);
-  const state = { latest: null, updates: 0 };
+  const state = { latest: null, updates: 0, abort: () => controller.abort() };
   const reader = response.body.getReader();
   let buffer = "";
   (async () => {
@@ -217,7 +217,10 @@ test("leaving moves the turn and transfers hosting without breaking the room", a
   assert.equal(result.players.length, 2);
   await action(code, second, "skip");
   const recovered = await action(code, third, "leave");
-  assert.equal(recovered.status, "waiting");
+  assert.equal(recovered.status, "finished");
+  assert.equal(recovered.winner, second.playerId);
+  assert.equal(recovered.finishReason, "last-player");
+  assert.equal(recovered.players[0].score, 1);
 });
 test("daily progress resumes, hint limits apply, challenges solve, answers stay hidden", async () => {
   const first = await request("/api/solo/new", {
@@ -303,6 +306,37 @@ test("public matchmaking respects the chosen capacity and separates room sizes",
   });
   assert.notEqual(d.room.code, a.room.code);
 });
+test("last connected player wins after reconnect grace, but a brief reconnect does not end the game", async () => {
+  const host = await request(
+      "/api/rooms",
+      { name: "Disconnect Host", mode: "race" },
+      200,
+      { "X-Forwarded-For": "198.51.100.77" },
+    ),
+    code = host.room.code;
+  const guest = await request(`/api/rooms/${code}/join`, { name: "Guest" });
+  const first = await stream(code, host);
+  let second = await stream(code, guest);
+  await action(code, host, "start");
+  second.abort();
+  await pause(1200);
+  second = await stream(code, guest);
+  await until(() => first.latest?.players.every((p) => p.online));
+  assert.equal(first.latest.status, "playing");
+  second.abort();
+  const deadline = Date.now() + 16000;
+  while (Date.now() < deadline && first.latest?.status !== "finished")
+    await pause(100);
+  assert.equal(first.latest.status, "finished");
+  assert.equal(first.latest.winner, host.playerId);
+  assert.equal(first.latest.finishReason, "last-player");
+  assert.equal(
+    first.latest.players.find((p) => p.id === host.playerId).score,
+    1,
+  );
+  first.abort();
+});
+
 test("HTTP rejects malformed objects, oversize bodies, wrong media types and protects operational endpoints", async () => {
   for (const body of ["null", "[]", "{broken"]) {
     const r = await fetch(base + "/api/rooms", {

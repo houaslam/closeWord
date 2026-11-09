@@ -402,7 +402,9 @@ test(
     await until(() => second.room?.turn === guest.playerId);
     const left = await action(room, host, "leave");
     assert.equal(left.host, guest.playerId);
-    assert.equal(left.status, "waiting");
+    assert.equal(left.status, "finished");
+    assert.equal(left.winner, guest.playerId);
+    assert.equal(left.finishReason, "last-player");
     first.abort.abort();
     second.abort.abort();
   },

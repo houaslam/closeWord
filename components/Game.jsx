@@ -6,7 +6,8 @@ import {
   Icon,
   avatars,
   rankLabel,
-  PlayerProximity,
+  RaceTrack,
+  seatColors,
   GuessForm,
   GuessRow,
   GuessList,
@@ -704,9 +705,10 @@ export default function Game() {
             <div
               className={`players ${room.players.length === 1 ? "single" : ""}`}
             >
-              {room.players.map((p) => (
+              {room.players.map((p, i) => (
                 <div
                   key={p.id}
+                  style={{ "--seat-color": seatColors[i] }}
                   className={`player-card ${p.id === seat.playerId ? "me" : ""} ${playing && p.id === room.turn && room.mode === "turn" ? "current" : ""}`}
                 >
                   <span
@@ -738,45 +740,44 @@ export default function Game() {
                           ? `Best ${rankLabel(p.bestRank)} · ${p.guessCount} ${p.guessCount === 1 ? "guess" : "guesses"}`
                           : "No guesses yet"}
                     </div>
-                    <PlayerProximity
-                      name={p.name}
-                      rank={waiting ? null : p.bestRank}
-                    />
                   </div>
                   {p.score > 0 && <span className="you">{p.score} ★</span>}
                 </div>
               ))}
             </div>
-            <div className="status-banner">
-              {waiting ? (
-                <>
-                  Waiting for{" "}
-                  {room.players.length === 1
-                    ? "players to join…"
-                    : host
-                      ? "you to start…"
-                      : "the host to start…"}
-                  <span
-                    style={{
-                      display: "block",
-                      fontSize: 12,
-                      opacity: 0.7,
-                      marginTop: 3,
-                    }}
-                  >
-                    {room.players.length} / {room.maxPlayers} players
-                  </span>
-                </>
-              ) : finished ? (
-                `🎉 ${room.players.find((p) => p.id === room.winner)?.name || "A player"} found the word!`
-              ) : room.mode === "race" ? (
-                "The race is on — find the secret word!"
-              ) : room.turn === seat.playerId ? (
-                "Your turn — make a guess!"
-              ) : (
-                `${current?.name || "Another player"}’s turn…`
-              )}
-            </div>
+            {!waiting && <RaceTrack players={room.players} mode={room.mode} />}
+            {(!playing || room.mode !== "race") && (
+              <div className="status-banner">
+                {waiting ? (
+                  <>
+                    Waiting for{" "}
+                    {room.players.length === 1
+                      ? "players to join…"
+                      : host
+                        ? "you to start…"
+                        : "the host to start…"}
+                    <span
+                      style={{
+                        display: "block",
+                        fontSize: 12,
+                        opacity: 0.7,
+                        marginTop: 3,
+                      }}
+                    >
+                      {room.players.length} / {room.maxPlayers} players
+                    </span>
+                  </>
+                ) : finished ? (
+                  `🎉 ${room.players.find((p) => p.id === room.winner)?.name || "A player"} ${room.finishReason === "last-player" ? "wins — everyone else left!" : "found the word!"}`
+                ) : room.mode === "race" ? (
+                  "The race is on — find the secret word!"
+                ) : room.turn === seat.playerId ? (
+                  "Your turn — make a guess!"
+                ) : (
+                  `${current?.name || "Another player"}’s turn…`
+                )}
+              </div>
+            )}
             {waiting && (
               <>
                 <p className="share-label">

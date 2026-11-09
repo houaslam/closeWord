@@ -44,25 +44,90 @@ const rankFill = (rank) =>
     : rank === 1
       ? 100
       : Math.max(5, Math.min(98, 100 - Math.log10(rank) * 21));
-export function PlayerProximity({ name, rank }) {
+export const seatColors = [
+  "#3b82f6",
+  "#e08a1e",
+  "#a56de2",
+  "#39aa91",
+  "#e2628f",
+  "#b6ac35",
+];
+export function RaceTrack({ players, mode }) {
+  const progress = (rank) =>
+    !rank
+      ? 0
+      : rank === 1
+        ? 100
+        : Math.max(
+            3,
+            Math.min(
+              97,
+              Math.round((1 - Math.log(rank) / Math.log(30000)) * 100),
+            ),
+          );
   return (
-    <div
-      className={`player-proximity ${rank && rank <= 300 ? "hot" : rank && rank <= 1500 ? "warm" : ""}`}
-      role="progressbar"
-      aria-label={`${name} proximity to the secret word`}
-      aria-valuemin={0}
-      aria-valuemax={100}
-      aria-valuenow={Math.round(rankFill(rank))}
-      aria-valuetext={
-        rank
-          ? rank === 1
-            ? "Secret word found"
-            : `Best rank ${rankLabel(rank)}; lower is closer`
-          : "No guesses yet"
-      }
+    <section
+      className="race-progress"
+      aria-label="Player proximity to the secret word"
     >
-      <span style={{ width: `${rankFill(rank)}%` }} />
-    </div>
+      <div className="race-progress-heading">
+        {mode === "race" ? "Race progress" : "Word progress"} — closer to the
+        flag wins
+      </div>
+      <div className="race-track">
+        <span className="race-start" aria-hidden="true" />
+        {players.map((p, i) => (
+          <div
+            key={p.id}
+            className="race-fill"
+            style={{
+              width: `${progress(p.bestRank)}%`,
+              background: seatColors[i],
+              zIndex: players.length - i,
+            }}
+            aria-hidden="true"
+          />
+        ))}
+        {players.map((p, i) => (
+          <div
+            key={p.id}
+            className="race-marker"
+            role="progressbar"
+            tabIndex={0}
+            aria-label={`${p.name} proximity to the secret word`}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={progress(p.bestRank)}
+            aria-valuetext={
+              p.bestRank
+                ? p.bestRank === 1
+                  ? "Secret word found"
+                  : `Best rank ${rankLabel(p.bestRank)}; lower is closer`
+                : "No guesses yet"
+            }
+            title={`${p.name}: ${p.bestRank ? `best ${rankLabel(p.bestRank)}` : "no guess yet"}`}
+            style={{
+              left: `${Math.max(3, Math.min(97, progress(p.bestRank)))}%`,
+              "--seat-color": seatColors[i],
+              zIndex: players.length + i + 1,
+            }}
+          >
+            <span
+              className="race-avatar"
+              style={{
+                background: `hsl(${[306, 217, 35, 110, 265, 18][p.avatar]} 70% 85%)`,
+              }}
+              aria-hidden="true"
+            >
+              {avatars[p.avatar]}
+            </span>
+          </div>
+        ))}
+        <span className="race-finish" aria-hidden="true">
+          🏁
+        </span>
+      </div>
+    </section>
   );
 }
 export function GuessRow({ guess: g }) {
