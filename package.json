@@ -17,12 +17,14 @@
     "test:container": "node scripts/container-smoke.mjs",
     "build": "next build --webpack",
     "vercel:check": "node scripts/vercel-check.mjs",
-    "test:redis": "node --test test/redis.test.mjs"
+    "test:redis": "node --test test/redis.test.mjs",
+    "test:supabase": "node --test test/supabase.test.mjs"
   },
   "engines": {
     "node": ">=24.22.2 <25"
   },
   "devDependencies": {
+    "pg": "8.23.1",
     "prettier": "3.9.10"
   },
   "dependencies": {

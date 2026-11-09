@@ -1,59 +1,32 @@
 # Deploy CloseWord on Vercel
 
-The name-only MVP now has a shared Redis backend for Vercel. Accounts remain on `feature/accounts-auth`. Local development continues to use SQLite unless `GAME_STORAGE=redis` is selected.
+The name-only MVP uses Supabase shared storage on Vercel, with Redis available as an explicit compatibility option. Accounts remain on `feature/accounts-auth`. Local development continues to use SQLite unless `GAME_STORAGE=redis` is selected.
 
 ## Your setup
 
-1. Push the project to GitHub and import the **`main`** branch into Vercel. Use the **Next.js** framework preset, Node.js **24.x**, the repository root, and the build/install commands from `vercel.json`. Do not upload `.env`, `.secrets`, databases, or backups.
-2. In your Vercel project's **Storage / Marketplace**, connect **Upstash Redis**. Select a region close to the application's `iad1` region. Configure separate Preview and Production databases where possible. The integration can add the connection environment variables automatically.
-3. Ensure these **server-only** variables are available in the deployment environment:
+**Use [SUPABASE.md](SUPABASE.md) for the current default deployment.** Run the supplied SQL migration in your Supabase project, add `GAME_STORAGE=supabase`, `SUPABASE_URL` and `SUPABASE_SECRET_KEY` in Vercel, then redeploy. [.env.vercel.example](.env.vercel.example) is the settings template. A server secret stays in Vercel and is never sent to browsers.
 
-   | Variable                   | Value                                                        |
-   | -------------------------- | ------------------------------------------------------------ |
-   | `UPSTASH_REDIS_REST_URL`   | The database's HTTPS REST endpoint, without a trailing slash |
-   | `UPSTASH_REDIS_REST_TOKEN` | Its **read/write** REST token, not the read-only token       |
+Import the GitHub **main** branch with the Next.js preset and Node.js 24.x. Keep Vercel system environment variables enabled so generated deployment origins and Preview namespaces are derived safely. For a custom Production domain, set `PUBLIC_ORIGIN` in Production only. Do not upload private environment files, local databases or backups.
 
-   The Vercel integration's `KV_REST_API_URL` and `KV_REST_API_TOKEN` names are also supported as a complete pair. Use either complete pair. Never prefix these credentials with `NEXT_PUBLIC_`.
+### Optional Redis deployment
 
-4. Keep Vercel's system environment variables enabled. The app automatically selects Redis, derives its deployment origin, and separates the Production namespace from each Preview deployment. For a custom Production domain, set `PUBLIC_ORIGIN=https://your-domain.com` in **Production** only, with no trailing slash. An optional `GAME_NAMESPACE` override must use different values in Preview and Production. No email credentials are needed.
-5. Deploy a **Preview**, open `/health/ready`, and confirm `{"ready":true,"storage":"redis"}`. Test an invite with six separate browsers/devices, then deploy to Production. Environment changes require a redeployment.
+The previous Upstash backend remains supported when you explicitly set `GAME_STORAGE=redis`. Connect Upstash through Vercel Marketplace and supply `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` (or the complete `KV_REST_API_URL/TOKEN` pair). Do not use Redis settings when selecting Supabase. The live project still needs real provider credentials and a successful deployed readiness check.
 
-Use [.env.vercel.example](.env.vercel.example) as the settings template. Do not add `DATABASE_PATH`, `HOST`, `PORT`, `TRUST_PROXY`, or file-based secrets in Vercel. The generated deployment hostname, branch hostname and configured public origin are accepted; arbitrary request hostnames are not trusted.
+### Readiness
 
-Official setup references: [Vercel Marketplace storage](https://vercel.com/docs/marketplace-storage), [Upstash's Vercel integration](https://upstash.com/docs/redis/howto/vercelintegration), and [Vercel system variables](https://vercel.com/docs/environment-variables/system-environment-variables).
-
-## Check credentials before launch
-
-After pulling or securely creating a private `.env.vercel.local` file containing the real database URL and token:
-
-```sh
-node --env-file=.env.vercel.local scripts/vercel-check.mjs
-```
-
-With credentials already exported in your shell, use `npm run vercel:check`. The check verifies HTTPS access, a temporary write/read/delete, Lua support, and bundled word artifacts. It prints no credentials. Placeholder values are not real credentials; a successful build alone does not prove that the database is connected. The code is prepared, but live deployment remains unverified until your actual database is connected and the Preview passes.
-
-## If the deployed game is unavailable
-
-Open `/health/ready`. A 503 response now includes a safe diagnostic code without exposing credentials:
-
-- `MISSING_REDIS_CONFIG`: connect Upstash and add a complete REST URL/token pair to the affected Vercel environment, then redeploy.
-- `INVALID_PUBLIC_ORIGIN`: enable system environment variables or correct the public HTTPS origin.
-- `INVALID_REDIS_URL`: use the database's HTTPS origin rather than a dashboard link or URL with a path.
-- `MISSING_WORD_ARTIFACTS`: rebuild the latest main branch so the bundled word files are included.
-
-A trailing root `/` or surrounding whitespace in copied deployment URLs is normalized automatically. Credentials embedded in URLs and non-root paths remain rejected. Function logs include the initialization stage and safe diagnostic code; the readiness response includes the deployment commit when Vercel supplies it.
+Check `/health/ready` after redeploying. It reports the selected storage provider and safe error codes when settings or the database schema are missing. A build alone does not provision or connect a database. See the provider setup guide for the exact corrective steps.
 
 ## How multiplayer works on Vercel
 
-Each room and solo game lives in shared Redis. Atomic compare-and-set scripts enforce capacity and turn order, commit one winner, and award leaderboard points once even when players submit simultaneously. Matchmaking, rate limits, connection limits and presence are shared across instances. No local SQLite file or permanent in-memory room cache is used in Redis mode.
+Each room and solo game lives in the selected shared database. Atomic compare-and-set operations enforce capacity and turn order, commit one winner, and award leaderboard points once even when players submit simultaneously. Matchmaking, rate limits, connection limits and presence are shared across instances. No local SQLite file or permanent in-memory room cache is used in either shared storage mode.
 
 Clients receive Server-Sent Events. Each active connection checks shared state approximately once per second and receives only that player's permitted view. Streams rotate after approximately 45 seconds, below the configured 60-second function duration, and the browser reconnects with the same private seat token. Presence has a 12-second grace period so stream rotation does not skip a player's turn. Disconnected turn holders are skipped after that grace period. The frontend ignores older room revisions that arrive after a newer update.
 
-Rooms and solo games expire after seven days without mutations. Preview data uses a separate namespace per deployment. Production data survives redeployments as long as the database and namespace remain the same. Local SQLite data is not automatically uploaded or migrated. Week/month Redis leaderboard views aggregate the latest 7/30 UTC calendar days; all-time totals persist.
+Rooms and solo games expire after seven days without mutations. Preview data uses a separate namespace per deployment. Production data survives redeployments as long as the database and namespace remain the same. Local SQLite data is not automatically uploaded or migrated. Week/month shared leaderboard views aggregate the latest 7/30 UTC calendar days; all-time totals persist.
 
 ## Limits and operations
 
-Choose a Redis plan suitable for the request volume. Active streams poll Redis, so six connected players generate continuous Redis requests and consume Vercel function duration. Check both providers' usage and limits; this is not a guarantee of free hosting. Leave database eviction disabled so game state is not silently discarded under memory pressure. Configure a Redis backup/restore policy appropriate to your plan, and monitor errors, latency, request quotas and function usage. SQLite backup scripts apply only to the local SQLite backend.
+Choose a database plan suitable for the request volume. Active streams poll shared storage, so six connected players generate continuous database requests and consume Vercel function duration. Check both providers' usage and limits; this is not a guarantee of free hosting. For Redis, leave database eviction disabled so game state is not silently discarded under memory pressure. Configure a provider backup/restore policy appropriate to your plan, and monitor errors, latency, request quotas and function usage. SQLite backup scripts apply only to the local SQLite backend.
 
 Optional `METRICS_TOKEN` protects `/metrics` with Bearer authorization. Do not share credentials or private seat tokens in logs. `/.env*`, `/data/*` and server source files are not public assets.
 

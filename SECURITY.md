@@ -17,3 +17,7 @@ Authentication and account history remain preserved on `feature/accounts-auth`, 
 Redis mode uses server-only REST credentials over HTTPS and stores game state in shared storage. Capacity, winner awards and game updates use atomic Lua compare-and-set scripts; rate limits and connection limits are shared. Production and Preview namespaces differ by default. A twelve-second presence grace period protects reconnecting players from losing their turn during function rotation. Browser updates carry a revision so older responses do not overwrite newer room state.
 
 Never expose the Redis token in `NEXT_PUBLIC_` variables or browser assets. Use a read/write token, restrict operator access, disable database eviction, monitor quotas, and configure provider backups. The SQLite backup scripts do not back up Redis. Live provider credentials and public deployment are not verified by local tests.
+
+## Supabase
+
+Supabase is the default Vercel provider. Its server secret or legacy service-role key remains in the backend. Game tables live in a private schema with RLS and no browser grants; only the server role can invoke the explicitly protected RPC functions. Database transactions enforce capacity, compare-and-set room updates, rate counters, presence limits and winner awards. Anonymous clients receive only server-filtered SSE snapshots, never raw table change subscriptions. Run the SQL migration and verify the actual project settings before launch; local PostgreSQL tests do not prove the live project is configured.

@@ -53,12 +53,12 @@ export function configuration() {
     if (parsed.protocol !== "https:")
       throw Error("Production requires an HTTPS PUBLIC_ORIGIN.");
   }
-  const storage = process.env.GAME_STORAGE || (vercel ? "redis" : "sqlite");
-  if (!["sqlite", "redis"].includes(storage))
-    throw Error("GAME_STORAGE must be sqlite or redis.");
-  if (vercel && storage !== "redis")
+  const storage = process.env.GAME_STORAGE || (vercel ? "supabase" : "sqlite");
+  if (!["sqlite", "redis", "supabase"].includes(storage))
+    throw Error("GAME_STORAGE must be sqlite, redis or supabase.");
+  if (vercel && storage === "sqlite")
     throw Error(
-      "Vercel requires GAME_STORAGE=redis; local SQLite is not persistent there.",
+      "Vercel requires shared storage (supabase or redis); local SQLite is not persistent there.",
     );
   const upstash = Boolean(
     process.env.UPSTASH_REDIS_REST_URL || process.env.UPSTASH_REDIS_REST_TOKEN,
@@ -99,6 +99,53 @@ export function configuration() {
       throw Error("Redis REST URL must be an HTTPS origin without a path.");
     redisUrl = endpoint.origin;
   }
+  let supabaseUrl = (
+    process.env.SUPABASE_URL ||
+    process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    ""
+  ).trim();
+  const supabaseKey = (
+    process.env.SUPABASE_SECRET_KEY ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    ""
+  ).trim();
+  if (storage === "supabase") {
+    if (!supabaseUrl || !supabaseKey)
+      throw Error(
+        "Supabase requires SUPABASE_URL and SUPABASE_SECRET_KEY (or SUPABASE_SERVICE_ROLE_KEY).",
+      );
+    let endpoint;
+    try {
+      endpoint = new URL(supabaseUrl);
+    } catch {
+      throw Error("Supabase URL must be a valid HTTPS origin.");
+    }
+    if (
+      endpoint.protocol !== "https:" ||
+      endpoint.pathname !== "/" ||
+      endpoint.search ||
+      endpoint.hash ||
+      endpoint.username ||
+      endpoint.password
+    )
+      throw Error(
+        "Supabase URL must be an HTTPS project origin without a path.",
+      );
+    supabaseUrl = endpoint.origin;
+    let legacyRole;
+    try {
+      legacyRole = JSON.parse(
+        Buffer.from(supabaseKey.split(".")[1] || "", "base64url").toString(),
+      ).role;
+    } catch {}
+    if (
+      supabaseKey.startsWith("sb_publishable_") ||
+      (legacyRole && legacyRole !== "service_role")
+    )
+      throw Error(
+        "Supabase requires a server secret key, not a publishable or anon key.",
+      );
+  }
   const preview = vercel && process.env.VERCEL_ENV !== "production";
   const previewId = createHash("sha256")
     .update(
@@ -129,6 +176,8 @@ export function configuration() {
     storage,
     redisUrl,
     redisToken,
+    supabaseUrl,
+    supabaseKey,
     namespace,
     allowedOrigins: [...allowedOrigins],
     port,

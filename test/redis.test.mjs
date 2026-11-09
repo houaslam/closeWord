@@ -538,6 +538,7 @@ test("Vercel configuration requires Redis secrets, derives origins and isolates 
       "GAME_NAMESPACE",
     ])
       delete process.env[key];
+    process.env.GAME_STORAGE = "redis";
     assert.throws(configuration, /Redis requires/);
     process.env.UPSTASH_REDIS_REST_URL = "https://redis.test.invalid";
     process.env.UPSTASH_REDIS_REST_TOKEN = "test-only";

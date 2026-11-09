@@ -4,7 +4,7 @@ Name-only word games for **2–6 remote players**, with turn-by-turn and speed-r
 
 ## Run locally
 
-Built with **Next.js 16.4.5, React 19.3.1, and JavaScript**. The interface uses React components and Next.js routing; game requests and Server-Sent Events run through native Next.js API routes.
+Built with **Next.js 16.4.5, React 19.3.1, and JavaScript**. The interface uses React components and Next.js routing; game requests and Server-Sent Events run through native Next.js API routes. Supabase is the default shared database on Vercel.
 
 Use Node.js **24.22.2 or newer in the 24.x LTS line** (`nvm use`).
 
@@ -35,7 +35,9 @@ Local rooms, guesses, solo progress and nickname leaderboard entries persist in 
 - `pages/`: Next.js pages, document, global application wrapper, and API routes.
 - `components/`: React game screens, dialogs, and shared controls.
 - `lib/game-service.mjs`: local SQLite multiplayer and solo game service.
-- `lib/redis-game-service.mjs` and `lib/redis-store.mjs`: shared Vercel game storage, atomic updates, presence and live streams.
+- `lib/shared-game-service.mjs`: common multiplayer logic and filtered live streams.
+- `lib/supabase-store.mjs` and `supabase/migrations/`: Supabase storage and database schema.
+- `lib/redis-store.mjs`: optional Redis storage compatibility.
 - `lib/client.js`: browser API and local-storage helpers.
 - `styles/globals.css`: the existing game design, now imported by Next.js.
 - `engine.mjs` and `storage.mjs`: semantic word rankings and SQLite persistence.
@@ -44,9 +46,9 @@ Local rooms, guesses, solo progress and nickname leaderboard entries persist in 
 
 Build with `npm run build`, then run `PUBLIC_ORIGIN=https://game.yourdomain.com npm start` behind an HTTPS proxy. `npm run dev` provides the local development server. The Docker image builds and runs the production Next.js application.
 
-For **Vercel**, follow [VERCEL.md](VERCEL.md) and use [.env.vercel.example](.env.vercel.example). Connect Upstash Redis through Vercel Marketplace, provide its server-only REST URL and read/write token, then redeploy. Redis mode stores rooms, presence, matchmaking and rate limits outside the function instance and rotates live streams with automatic reconnection. Production and Preview data are isolated by default. No email service is required.
+For **Vercel**, follow [SUPABASE.md](SUPABASE.md) and use [.env.vercel.example](.env.vercel.example). Run the database migration, add your Supabase project URL and server secret in Vercel, and redeploy. Supabase mode shares rooms, presence, matchmaking and rate limits across function instances. Production and Preview data are isolated by default. The MVP needs no Supabase Auth or email service. Redis is still available with an explicit `GAME_STORAGE=redis` setting.
 
-The shared backend is implemented and locally tested. Your real database credentials and a successful deployed Preview are still required; a build does not configure those resources automatically.
+The backend and migration are implemented and locally tested. Your actual Supabase credentials, applied schema, and successful deployed Preview are still required. The account branch remains unchanged.
 
 ## Verification
 
@@ -57,7 +59,7 @@ npm run loadtest
 npm run format:check
 ```
 
-Tests cover six independent connections, both game modes, capacity limits, race privacy, winner announcement, rematches, reconnects, HTTP validation, origin protection, database fencing, crash recovery, and encrypted backups. The load test uses 20 rooms and 120 connected clients and verifies that every client receives the final result. The production Next.js integration test checks native API routes with six live clients, race privacy, winners, reconnects and rematches, as well as React page delivery and per-request script nonces. Build before running the full suite; that integration test is skipped if no production build exists. CI builds first, supplies real Redis for cross-instance multiplayer tests, and also validates deployment configuration and the container. See [VERCEL.md](VERCEL.md) for deployment-specific verification.
+Tests cover six independent connections, both game modes, capacity limits, race privacy, winner announcement, rematches, reconnects, HTTP validation, origin protection, database fencing, crash recovery, and encrypted backups. The load test uses 20 rooms and 120 connected clients and verifies that every client receives the final result. The production Next.js integration test checks native API routes with six live clients, race privacy, winners, reconnects and rematches, as well as React page delivery and per-request script nonces. Build before running the full suite; that integration test is skipped if no production build exists. CI builds first, supplies real PostgreSQL and Redis for cross-instance multiplayer tests, and also validates deployment configuration and the container. See [VERCEL.md](VERCEL.md) for deployment-specific verification.
 
 ## Words
 

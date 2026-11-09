@@ -14,6 +14,11 @@ export default async function handler(req, res) {
   try {
     const settings = configuration();
     stage = settings.storage;
+    if (settings.storage === "supabase") {
+      const { supabaseGameService } =
+        await import("../../lib/supabase-game-service.mjs");
+      return await supabaseGameService().handle(req, res);
+    }
     if (settings.storage === "redis") {
       const { redisGameService } =
         await import("../../lib/redis-game-service.mjs");

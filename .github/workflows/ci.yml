@@ -11,7 +11,14 @@ jobs:
         image: public.ecr.aws/docker/library/redis@sha256:c5d34a98396a4775e223c74e929162c35c5a2182901ba26b50ade939941ce14b
         ports: ["6379:6379"]
         options: --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
+      postgres:
+        image: public.ecr.aws/docker/library/postgres@sha256:1108a8fe22dff4eab48870e081be046d549ddc1b6f5972e0a766eaf1e0b1003c
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U postgres" --health-interval 10s --health-timeout 5s --health-retries 5
     env:
+      PG_TEST_PORT: "5432"
       REDIS_TEST_PORT: "6379"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

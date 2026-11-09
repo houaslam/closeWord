@@ -4,7 +4,7 @@ The application uses Next.js 16 and React 19, with native Next.js API routes. It
 
 ## Vercel deployment
 
-Use the shared Redis backend described in [VERCEL.md](VERCEL.md). `vercel.json` configures the build, region and function duration. Vercel automatically uses Redis and requires a real Upstash REST URL and read/write token; it refuses SQLite mode. The code is prepared and distributed behavior is tested locally, but the actual database connection and deployed Preview must still be verified. The single-server container instructions below retain SQLite.
+Use the shared Supabase backend described in [SUPABASE.md](SUPABASE.md). `vercel.json` configures the build, region and function duration. Vercel defaults to Supabase and requires a real project URL, server secret and applied SQL migration; it refuses SQLite mode. Redis remains an explicit compatibility option. The code is prepared and distributed behavior is tested locally, but the actual database connection and deployed Preview must still be verified. The single-server container instructions below retain SQLite.
 
 ## Container deployment
 
